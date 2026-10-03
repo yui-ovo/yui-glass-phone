@@ -140,7 +140,20 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const { wrap, scroll } = base('我'); const self = session.book.self;
       const card = button('', () => go('self'), 'profile-card'); card.setAttribute('aria-label', '我的名片');
       const copy = el('span', 'profile-text'); copy.append(el('strong', '', self.name), el('small', '', `账号 · ${self.account}`)); card.append(avatar(self), copy, symbol('arrow')); scroll.append(card);
-      for (const [label, target, glyph] of [['人物管理', 'people', 'contacts'], ['设置', 'settings', 'settings']]) { const b = button(label, () => go(target), 'menu-row'); b.prepend(symbol(glyph)); scroll.append(b); }
+      scroll.classList.add('me-page');
+      const groups = [
+        [['钱包', null, 'wallet']],
+        [['收藏', null, 'bookmark'], ['相册', null, 'image'], ['朋友圈', 'moments', 'moments']],
+        [['设置', 'settings', 'settings']],
+      ];
+      for (const entries of groups) {
+        const group = el('div', 'glass-menu');
+        for (const [label, target, glyph] of entries) {
+          const row = button('', () => target ? go(target) : notify(`${label}功能待接入`), 'menu-row');
+          row.append(symbol(glyph), el('span', '', label), symbol('arrow')); group.append(row);
+        }
+        scroll.append(group);
+      }
       return wrap;
     }
     if (target === 'add') {
@@ -151,14 +164,14 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }
     const manage = target === 'people', title = manage ? '人物管理' : target === 'messages' ? '消息' : '联系人';
     const add = button('', () => go('add'), 'icon-button'); add.setAttribute('aria-label', '登记人物'); add.innerHTML = icon('plus');
-    const { wrap, scroll } = base(title, manage ? 'me' : 'home', add);
+    const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', target === 'messages' ? undefined : add);
     search(scroll);
     const list = manage ? session.book.people : session.book.people.filter(p => p.relation.friend);
     if (target === 'messages') scroll.append(el('p', 'profile-help', '暂无聊天记录。下方好友可打开空聊天页。'));
     for (const person of list) scroll.append(personRow(person, manage));
     if (!list.length) empty(scroll, manage ? '此存档还没有登记人物' : '此存档暂无好友');
     const noMatch = el('p', 'directory-empty filter-empty', '没有找到相关联系人'); noMatch.hidden = true; scroll.append(noMatch);
-    if (!manage) scroll.append(button('管理剧情人物', () => go('people')));
+    if (target === 'contacts') scroll.append(button('管理剧情人物', () => go('people')));
     return wrap;
   }
   const unsubscribe = host.subscribe(() => {

@@ -28,7 +28,7 @@ async function start(tt = false, suffix = '') {
   await page.goto(base + '/preview.html' + suffix);
   return page;
 }
-async function open(page) { await b(page, '打开消息').click(); await until(() => b(page, '登记人物').count(), 'contacts loaded'); }
+async function open(page) { await b(page, '打开消息').click(); await b(page, '联系人').click(); await until(() => b(page, '登记人物').count(), 'contacts loaded'); }
 async function add(page, name, relation = 'friend', card = true) {
   await b(page, '登记人物').click(); await b(page, card ? '从当前角色卡带入' : '手动创建人物').click();
   if (card) assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '花店故事标题');
@@ -42,6 +42,18 @@ try {
     const page = await start(tt), label = tt ? 'TT' : 'ST';
     await page.evaluate(() => localStorage.setItem('yui-pocket.contacts.v1:test-user', '{"old":"untouched"}'));
     await open(page);
+    if (!tt) { await mkdir(path.join(root, 'test-results'), {recursive:true}); await page.screenshot({path:path.join(root,'test-results/v041-contacts.png')}); }
+    assert.equal(await b(page, '管理剧情人物').count(), 1);
+    await b(page, '消息').click(); assert.equal(await b(page, '管理剧情人物').count(), 0); assert.equal(await b(page, '登记人物').count(), 0);
+    if (!tt) await page.screenshot({path:path.join(root,'test-results/v041-messages.png')});
+    await b(page, '我').click(); assert.equal(await b(page, '人物管理').count(), 0);
+    for (const label of ['钱包', '收藏', '相册', '设置']) assert(await b(page, label).isVisible());
+    if (!tt) await page.screenshot({path:path.join(root,'test-results/v041-me.png')});
+    const beforeMenus = await storage(page, tt);
+    await b(page, '钱包').click(); assert.equal(await page.locator('.toast').textContent(), '钱包功能待接入');
+    assert.deepEqual(await storage(page, tt), beforeMenus);
+    await page.locator('.me-page').getByRole('button', {name:'朋友圈',exact:true}).click(); assert.equal(await page.locator('.toolbar h1').textContent(), '朋友圈');
+    await b(page, '联系人').click(); await b(page, '管理剧情人物').click(); await b(page, '返回').click(); assert.equal(await page.locator('.toolbar h1').textContent(), '联系人');
     assert.equal(await page.locator('.directory-view').getByText('林间').count(), 0);
     await add(page, '<img src=x onerror=alert(1)>'); await page.getByLabel('手机备注', { exact: true }).fill('阿棠'); await save(page);
     const original = (await books(page, tt))[0], id = original.people[0].id;
@@ -108,7 +120,7 @@ try {
   await b(avatarPage,'取消').click();await b(avatarPage,'返回手机桌面').click();await open(avatarPage);await b(avatarPage,'我').click();await b(avatarPage,'我的名片').click();
   const selfAccount=(await books(avatarPage))[0].self.account; await avatarPage.getByLabel('我的名字',{exact:true}).fill('玩家名字');await b(avatarPage,'保存我的名片').click();await until(async()=> (await avatarPage.locator('.profile-status').textContent()).includes('已保存'), 'self');
   assert.equal((await books(avatarPage))[0].self.account,selfAccount);await b(avatarPage,'取消').click();await avatarPage.reload();await open(avatarPage);await b(avatarPage,'我').click();await b(avatarPage,'我的名片').click();assert.equal(await avatarPage.getByLabel('我的名字',{exact:true}).inputValue(),'玩家名字');
-  await b(avatarPage,'取消').click();await b(avatarPage,'人物管理').click();await b(avatarPage,'编辑保留资料').click();
+  await b(avatarPage,'取消').click();await b(avatarPage,'联系人').click();await b(avatarPage,'管理剧情人物').click();await b(avatarPage,'编辑保留资料').click();
   await avatarPage.evaluate(()=>{const decode=HTMLImageElement.prototype.decode;HTMLImageElement.prototype.decode=function(){return decode.call(this).then(()=>new Promise(resolve=>window.releaseImage=resolve));};});
   await avatarPage.getByLabel('上传头像',{exact:true}).setInputFiles({name:'delay.png',mimeType:'image/png',buffer:png});await avatarPage.waitForFunction(()=>window.releaseImage);
   await avatarPage.evaluate(()=>profileMock.switch('0','B'));await until(()=>b(avatarPage,'登记人物').count(),'image switch');await avatarPage.evaluate(()=>releaseImage());assert.equal((await books(avatarPage))[0].people[0].avatar.kind,'url');assert.equal(await avatarPage.locator('.contact-row').count(),0);
