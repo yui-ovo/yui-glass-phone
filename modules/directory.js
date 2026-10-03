@@ -1,10 +1,15 @@
 import { clone, displayName, newPerson, sameJson } from './contacts.js';
 import { readAvatar, loadAvatarUrl } from './avatar.js';
 import { createProfileHost } from './host.js';
+import { createMessenger } from './messenger.js';
+import { latestMessage, forPerson } from './messages.js';
+import { mountConversation } from './message-view.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
 export function createDirectory({ window: win, document: doc, navigate, icon, notify }) {
   const host = createProfileHost(win);
+  const messenger = createMessenger(win, host);
+  let clearMessageView;
   let session, selected, route = 'messages', loadError = '', loading = false, dead = false;
   let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people';
   function el(tag, cls = '', text) { const node = doc.createElement(tag); node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -28,8 +33,9 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   function personRow(person, manage = false) {
     const row = button('', () => { selected = person.id; lastFormRoute = manage ? 'people' : 'chat'; go(manage ? 'details' : 'chat'); }, 'contact-row');
     row.setAttribute('aria-label', `${manage ? '编辑' : '打开聊天：'}${displayName(person)}`);
-    row.dataset.search = `${person.name} ${person.remark}`.toLowerCase();
-    const copy = el('span', 'directory-person'); copy.append(el('strong', '', displayName(person)), el('small', '', manage ? relationship(person) : '暂无消息'));
+    const history = messenger.history(), latest = history && latestMessage(history, person.id);
+    row.dataset.search = `${person.name} ${person.remark} ${!manage && history ? forPerson(history, person.id).map(m => m.text).join(' ') : ''}`.toLowerCase();
+    const copy = el('span', 'directory-person'); copy.append(el('strong', '', displayName(person)), el('small', 'message-summary', manage ? relationship(person) : latest ? latest.text.replace(/\s+/g, ' ').slice(0, 80) : history ? '暂无消息' : '消息暂不可读取'));
     row.append(avatar(person), copy, symbol('arrow')); return row;
   }
   function search(scroll) {
@@ -40,7 +46,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   async function load() {
     if (loading || dead) return;
     loading = true; loadError = ''; const epoch = generation, signal = controller.signal;
-    try { const result = await host.load(signal); if (!dead && epoch === generation) session = result; }
+    try { const result = await host.load(signal); if (!dead && epoch === generation) { session = result; await messenger.bind(result, signal); } }
     catch (error) { if (!dead && epoch === generation) loadError = error.message || '资料读取失败，未写入数据'; }
     finally { if (!dead && epoch === generation) { loading = false; navigate(route, false, true); } }
   }
@@ -116,7 +122,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     return wrap;
   }
   function render(target) {
-    route = target; clearEditor();
+    route = target; clearEditor(); clearMessageView?.(); clearMessageView = undefined;
     if (target === 'moments') { const { wrap, scroll } = base('朋友圈'); empty(scroll, '朋友圈功能尚未接入'); return wrap; }
     if (!session) {
       const { wrap, scroll } = base(({ messages: '消息', contacts: '联系人', me: '我', people: '人物管理' })[target] || '人物资料');
@@ -132,8 +138,8 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const person = session.book.people.find(p => p.id === selected && p.relation.friend);
       const more = button('', () => { lastFormRoute = 'chat'; go('details'); }, 'icon-button'); more.setAttribute('aria-label', '聊天资料'); more.innerHTML = icon('more');
       const { wrap, scroll } = base(person ? displayName(person) : '聊天', 'contacts', person ? more : undefined);
-      empty(scroll, person ? '暂无消息' : '找不到这个好友，请返回联系人');
-      if (person) { const compose = el('div', 'composer'); const input = el('input'); input.placeholder = '暂未接入消息功能'; input.disabled = true; input.setAttribute('aria-label', '消息输入框'); const send = button('发送', () => {}, 'send-button'); send.disabled = true; compose.append(input, send); wrap.append(compose); }
+      if (person) clearMessageView = mountConversation({wrap, scroll, person, self: session.book.self, messenger, el, button, avatar, icon});
+      else empty(scroll, '找不到这个好友，请返回联系人');
       return wrap;
     }
     if (target === 'me') {
@@ -167,22 +173,27 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', target === 'messages' ? undefined : add);
     search(scroll);
     const list = manage ? session.book.people : session.book.people.filter(p => p.relation.friend);
-    if (target === 'messages') scroll.append(el('p', 'profile-help', '暂无聊天记录。下方好友可打开空聊天页。'));
+    if (target === 'messages') {
+      const history = messenger.history();
+      if (history) list.sort((a, b) => (latestMessage(history, b.id)?.sequence || 0) - (latestMessage(history, a.id)?.sequence || 0));
+      if (messenger.status().error) scroll.append(el('p', 'profile-help', messenger.status().error), button('重新读取消息', () => { void messenger.refresh(); }));
+    }
     for (const person of list) scroll.append(personRow(person, manage));
     if (!list.length) empty(scroll, manage ? '此存档还没有登记人物' : '此存档暂无好友');
     const noMatch = el('p', 'directory-empty filter-empty', '没有找到相关联系人'); noMatch.hidden = true; scroll.append(noMatch);
     if (target === 'contacts') scroll.append(button('管理剧情人物', () => go('people')));
+    if (!manage) clearMessageView = messenger.subscribe(() => navigate(target, false, true));
     return wrap;
   }
   const unsubscribe = host.subscribe(() => {
-    const hadDraft = editor?.dirty(); clearEditor(); controller.abort(); controller = new AbortController(); generation++; session = undefined; selected = undefined; loading = false; loadError = '';
+    const hadDraft = editor?.dirty() || messenger.dirty(); clearEditor(); clearMessageView?.(); clearMessageView = undefined; messenger.reset(); controller.abort(); controller = new AbortController(); generation++; session = undefined; selected = undefined; loading = false; loadError = '';
     if (['chat', 'details', 'new-card', 'new-manual', 'self'].includes(route)) route = 'people';
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
   return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-manual', 'chat', 'details', 'self'].includes(target),
-    dirty: () => !!editor?.dirty(),
-    leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); return true; },
-    dispose() { dead = true; generation++; clearEditor(); controller.abort(); unsubscribe(); host.dispose(); },
+    dirty: () => !!editor?.dirty() || messenger.dirty(),
+    leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
+    dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },
   };
 }

@@ -9,7 +9,8 @@ export function ttFrame(snapshot) {
   if (snapshot?.version !== 1 || !frame || ![frame.left, frame.top, frame.width, frame.height, keyboard].every(x => Number.isFinite(x) && x >= 0) || !frame.width || !frame.height) return;
   return { ...frame, height: Math.max(1, frame.height - keyboard) };
 }
-export function ttStore(host, chatId, group, avatar) {
+export function ttStore(host, chatId, group, avatar, collection = 'contacts-v1') {
+  if (!['contacts-v1', 'messages-v1'].includes(collection)) throw Error('不支持的资料类型');
   const api = ttHost(host)?.api?.chat;
   if (!api?.open) throw Error('此 TT 版本未提供独立聊天资料接口，请更新 TT');
   const fileName = chatId.replace(/\.jsonl$/, '');
@@ -19,7 +20,7 @@ export function ttStore(host, chatId, group, avatar) {
   if (!store?.getJson || !store.setJson || !store.listKeys || !store.renameKey) throw Error('TT 独立资料接口不完整，请更新 TT');
   async function entry(chat) {
     const digest = await host.crypto.subtle.digest('SHA-256', new TextEncoder().encode(chat.replace(/\.jsonl$/, '')));
-    return 'contacts-v1-' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+    return collection + '-' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   }
   async function keys() {
     const values = await store.listKeys({ namespace: NAMESPACE });
@@ -91,7 +92,9 @@ export function createProfileHost(host) {
       renaming = true; changed();
       try {
         if (typeof event?.oldFileName !== 'string' || typeof event.newFileName !== 'string') throw Error('重命名事件无效');
-        if (ttHost(host)) await ttStore(host, event.newFileName, !!event.groupId, event.avatarId).rename(event.oldFileName);
+        if (ttHost(host)) {
+          for (const collection of ['contacts-v1', 'messages-v1']) await ttStore(host, event.newFileName, !!event.groupId, event.avatarId, collection).rename(event.oldFileName);
+        }
         else {
           const account = await accountHandle(life.signal); if (dead) return;
           const registry = readRegistry(account), scope = event.groupId ? `group:${event.groupId}` : `card:${event.avatarId}`;
@@ -112,6 +115,7 @@ export function createProfileHost(host) {
     });
   }
   return {
+    assertSession(session, signal) { ensure(session, generation, signal); },
     valid: () => !!snapshot(),
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     async load(signal) {

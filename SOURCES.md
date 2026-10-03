@@ -25,3 +25,9 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 这是公开 ABI 子集适配与模拟验证，不代表运行了真实 ST 服务端或 TT 原生应用。TT 不请求 ST `/api/users/me`，不使用私有 invoke，不读取消息数组、不修改聊天正文或 metadata。
 
 本轮不引用其他作者小手机实现。原机身/基础聊天样式继续沿用用户之前提供并授权使用的正文手机美化；此前参考记录保留在 README 历史说明中。
+
+## 0.5.0 文字消息
+
+新增 messages.js/message-host.js/messenger.js/message-view.js，业务模型与联系人分开。复用本项目已经核实的 ST 账号读取和 TT chat store API，不增加宿主消息/模型端点。Web Locks 使用浏览器公开 API；缺失时停止写入消息。原生 store 无 compare-and-swap，不宣称跨进程原子事务。
+
+按用户本轮要求再次核对其 regex-2026-10-03T16_57_48.251Z.json，真实文字气泡继续使用原 cv2 布局和 CSS，替换的是文本数据来源。没有复制旧 yui-pocket 的聊天 UI。

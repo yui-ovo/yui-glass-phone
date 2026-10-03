@@ -940,3 +940,19 @@ h1, h2, p { margin: 0; }
 .directory-view .composer .send-button { font-size: 10px; opacity: .45; }
 .directory-scroll .menu-row { width: 100%; }
 .directory-scroll [hidden] { display: none !important; }
+
+/* Real text records use the original regex phone's cv2 bubbles. */
+.real-messages .sp-message-bubble-cv2 { white-space: pre-wrap; overflow-wrap: anywhere; }
+.real-messages .avatar { width: 30px; height: 30px; font-size: 12px; }
+.real-messages .sp-message-main-cv2 { max-width: calc(100% - 40px); }
+.message-saved-time { font-size: 8px; color: #b6b2c177; align-self: flex-end; margin-top: 4px; }
+.pending-message { opacity: .62; }
+.message-local-note { flex-shrink: 0; font-size: 9px; color: #b6b2c18a; text-align: center; padding: 4px 10px 7px; }
+.text-composer { border-radius: 18px; padding: 5px 7px 5px 12px; gap: 6px; }
+.text-composer textarea { flex: 1; min-width: 0; resize: none; max-height: 100px; background: transparent; border: 0; outline: none; color: #e8e4ef; font-family: inherit; font-size: 16px; line-height: 1.45; padding: 4px 0; }
+.directory-view .text-composer .send-button { opacity: 1; flex-shrink: 0; }
+.directory-view .text-composer .send-button:disabled { opacity: .35; cursor: default; }
+.message-count { font-size: 8px; color: #b6b2c177; text-align: right; margin: 0 20px 3px; flex-shrink: 0; }
+.message-feedback { color: #d4c4d7; font-size: 10px; padding: 0 15px; flex-shrink: 0; }
+.message-feedback:empty { display: none; }
+.message-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
