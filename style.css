@@ -948,11 +948,27 @@ h1, h2, p { margin: 0; }
 .message-saved-time { font-size: 8px; color: #b6b2c177; align-self: flex-end; margin-top: 4px; }
 .pending-message { opacity: .62; }
 .message-local-note { flex-shrink: 0; font-size: 9px; color: #b6b2c18a; text-align: center; padding: 4px 10px 7px; }
-.text-composer { border-radius: 18px; padding: 5px 7px 5px 12px; gap: 6px; }
-.text-composer textarea { flex: 1; min-width: 0; resize: none; max-height: 100px; background: transparent; border: 0; outline: none; color: #e8e4ef; font-family: inherit; font-size: 16px; line-height: 1.45; padding: 4px 0; }
+.text-composer { min-height: 34px; border-radius: 20px; padding: 0 4px; gap: 4px; margin: 0 17px 10px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 3px 10px rgba(0,0,0,.08); }
+.text-composer textarea { display: block; flex: 1; min-width: 0; min-height: 22px; height: 22px; resize: none; max-height: min(88px, calc(var(--view-height, 100dvh) / 6)); background: transparent; border: 0; outline: none; color: #e8e4ef; font-family: inherit; font-size: 16px; line-height: 22px; padding: 0; margin: 0; overflow-y: auto; overscroll-behavior: contain; }
+.text-composer textarea::placeholder { color: rgba(255,255,255,.42); font-size: 10px; letter-spacing: .2px; }
+.text-composer .composer-button { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; align-self: flex-end; }
+.text-composer .composer-placeholder { height: 32px; }
+.text-composer:focus-within { border-color: #ffffff25; }
 .directory-view .text-composer .send-button { opacity: 1; flex-shrink: 0; }
 .directory-view .text-composer .send-button:disabled { opacity: .35; cursor: default; }
 .message-count { font-size: 8px; color: #b6b2c177; text-align: right; margin: 0 20px 3px; flex-shrink: 0; }
 .message-feedback { color: #d4c4d7; font-size: 10px; padding: 0 15px; flex-shrink: 0; }
 .message-feedback:empty { display: none; }
 .message-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The native frame can be shorter than the layout viewport used by @media. */
+:host([data-native-frame]) .overlay { padding: 12px 10px; }
+:host([data-short-frame]) .outside-note { display: none; }
+:host([data-compact-frame]) .outside-bar { height: 32px; }
+:host([data-compact-frame]) .outside-bar .close { height: 32px; }
+:host([data-compact-frame]) .status-bar { height: 28px; }
+:host([data-compact-frame]) .sp-phone-screen-cv2::before { height: 22px; }
+:host([data-compact-frame]) .message-local-note { display: none; }
+:host([data-compact-frame]) .real-messages { padding-top: 0; padding-bottom: 0; }
+.message-feedback { max-height: 36px; overflow-y: auto; }
+:host([data-compact-frame]) .message-feedback { max-height: 24px; }

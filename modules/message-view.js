@@ -6,24 +6,38 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   scroll.classList.add('chat-scroll', 'real-messages');
   const hint = el('p', 'message-local-note', '消息保存在本机，AI 回复尚未接入');
   const feedback = el('p', 'message-feedback'); feedback.setAttribute('role', 'status');
-  const composer = el('div', 'composer text-composer'), input = el('textarea'); input.rows = 2;
-  input.placeholder = '输入消息…'; input.setAttribute('aria-label', '消息输入框');
+  const composer = el('div', 'composer text-composer'), input = el('textarea'); input.rows = 1;
+  input.placeholder = '⟡小如思念送達中······ ♡⟡'; input.setAttribute('aria-label', '消息输入框');
+  input.title = `每条最多 ${MAX_TEXT} 个字符；Enter 换行，点击箭头发送。消息保存在本机，AI 回复尚未接入`;
   const count = el('span', 'message-count');
   let composing = false, active = true;
-  const send = button('', () => { if (composing) return; try { messenger.submit(person.id); } catch (e) { feedback.textContent = e.message; } }, 'send-button');
-  send.setAttribute('aria-label', '发送'); send.innerHTML = icon('send');
+  const extra = button('', () => { feedback.textContent = '目前支持文字消息，附件还未接入'; }, 'composer-button');
+  extra.setAttribute('aria-label', '添加附件');
+  extra.append(el('span', 'sp-fake-input-left-cv2'));
+  const send = button('', () => { if (composing) return; try { messenger.submit(person.id); } catch (e) { feedback.textContent = e.message; } }, 'composer-button send-button');
+  send.setAttribute('aria-label', '发送'); send.append(el('span', 'sp-fake-input-right-cv2'));
+  function resizeInput() {
+    if (!active || !input.isConnected) return;
+    const top = input.scrollTop;
+    input.style.height = '0px';
+    input.style.height = `${Math.max(22, input.scrollHeight)}px`;
+    input.scrollTop = top;
+  }
   function controls() {
     const state = messenger.draft(person.id), size = [...state.text].length;
     const status = messenger.status();
     send.disabled = composing || !state.text.trim() || size > MAX_TEXT || !!state.operation || !messenger.history() || status.reading;
     count.textContent = `${size} / ${MAX_TEXT}`;
+    count.hidden = size < MAX_TEXT * .9 || size > MAX_TEXT;
     if (size > MAX_TEXT) feedback.textContent = `每条消息最多 ${MAX_TEXT} 个字符，请缩短后发送`;
+    resizeInput();
   }
   input.addEventListener('input', () => { messenger.input(person.id, input.value); feedback.textContent = ''; controls(); });
   input.addEventListener('compositionstart', () => { composing = true; messenger.input(person.id, input.value); controls(); });
   input.addEventListener('compositionend', () => { composing = false; messenger.input(person.id, input.value); controls(); });
   // No Enter handler: native textarea behavior preserves newline/IME composition.
-  composer.append(input, send); wrap.append(hint, composer, count, feedback);
+  composer.append(extra, input, send); wrap.append(hint, count, feedback, composer);
+  const observer = new ResizeObserver(resizeInput); observer.observe(wrap);
   function bubble(message, pending) {
     const row = el('div', 'sp-message-cv2 self'), main = el('div', 'sp-message-main-cv2 self');
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
@@ -58,5 +72,5 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = scroll.scrollHeight; });
   }
   const unsubscribe = messenger.subscribe(paint); paint();
-  return () => { active = false; unsubscribe(); };
+  return () => { active = false; observer.disconnect(); unsubscribe(); };
 }

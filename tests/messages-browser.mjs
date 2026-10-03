@@ -50,6 +50,35 @@ try {
   for (const tt of [false,true]) {
     const p=await start(tt); await open(p);await add(p,'好友甲');await save(p);await b(p,'取消').click();await add(p,'好友乙');await save(p);await b(p,'取消').click();
     const before=(await books(p,tt))[0];await backContacts(p);await b(p,'打开聊天：好友甲').click();
+    if (tt) {
+      assert.equal(await textBox(p).getAttribute('placeholder'),'⟡小如思念送達中······ ♡⟡');
+      assert.equal(Math.round((await p.locator('.text-composer').boundingBox()).height),34);
+      await b(p,'添加附件').click();assert((await p.locator('.message-feedback').textContent()).includes('附件还未接入'));
+      for (const frame of [
+        {version:1,safeFrame:{left:0,top:80,width:393,height:300},ime:{keyboardOffset:0}},
+        {version:1,safeFrame:{left:0,top:120,width:393,height:240},ime:{keyboardOffset:0}},
+        {version:1,safeFrame:{left:0,top:0,width:320,height:568},ime:{keyboardOffset:220}},
+      ]) {
+        await p.evaluate(frame=>ttMock.emitLayout(frame),frame);
+        for (const draft of ['键盘草稿🙂\n第二行\n第三行\n第四行\n第五行','字'.repeat(9500),'字'.repeat(10001)]) {
+          await textBox(p).fill(draft);
+          await p.waitForTimeout(100);
+          const bounds=await p.locator('.page').boundingBox(), input=await textBox(p).boundingBox(), send=await b(p,'发送').boundingBox();
+          assert(input.y>=bounds.y && input.y+input.height<=bounds.y+bounds.height, 'textarea stays inside phone with reduced native frame');
+          assert(send.y+send.height<=bounds.y+bounds.height, 'send stays inside phone');
+          assert(send.y+send.height<=frame.safeFrame.top+frame.safeFrame.height-frame.ime.keyboardOffset,'send stays above keyboard');
+        }
+        await textBox(p).fill('键盘草稿🙂');
+        if (frame.safeFrame.height===300) await p.screenshot({path:path.join(root,'test-results/keyboard-frame.png')});
+        await b(p,'收起手机').click();await b(p,'打开灰玻璃小手机').click();assert.equal(await textBox(p).inputValue(),'键盘草稿🙂');
+      }
+      await sendText(p,'键盘内可发送');assert.equal(await bubbles(p).count(),1);
+      // Restore this fixture's empty history so the existing persistence assertions remain unchanged.
+      await p.evaluate(()=>{const data=ttMock.data();for(const key of Object.keys(data))if(key.includes('/messages-v1-'))delete data[key];localStorage.setItem('fixture.tt.store',JSON.stringify(data));});
+      await p.reload();await open(p);await b(p,'打开聊天：好友甲').click();
+      await p.evaluate(()=>ttMock.emitLayout({version:1,safeFrame:{left:0,top:24,width:375,height:620},ime:{keyboardOffset:0}}));
+      passed.push('TT layout mock: reduced/panned iOS frame and Android keyboard inset keep multiline input/send visible; collapse retains draft; send works');
+    }
     assert.equal(await textBox(p).getAttribute('type'),null);
     await textBox(p).fill('中文');await textBox(p).press('Enter');await textBox(p).press('End');await textBox(p).type('emoji🙂');
     assert((await textBox(p).inputValue()).includes('\n'));assert.equal((await histories(p,tt)).length,0);
