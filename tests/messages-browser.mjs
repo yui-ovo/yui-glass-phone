@@ -50,6 +50,8 @@ try {
   for (const tt of [false,true]) {
     const p=await start(tt); await open(p);await add(p,'好友甲');await save(p);await b(p,'取消').click();await add(p,'好友乙');await save(p);await b(p,'取消').click();
     const before=(await books(p,tt))[0];await backContacts(p);await b(p,'打开聊天：好友甲').click();
+    const composerBounds=await p.locator('.text-composer').boundingBox(), homeBounds=await b(p,'返回手机桌面').boundingBox();
+    assert(homeBounds.y-composerBounds.y-composerBounds.height<=3,'composer is close to the home indicator');
     if (tt) {
       assert.equal(await textBox(p).getAttribute('placeholder'),'⟡小如思念送達中······ ♡⟡');
       assert.equal(Math.round((await p.locator('.text-composer').boundingBox()).height),34);

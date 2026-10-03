@@ -39,6 +39,45 @@ async function storage(page, tt = false) { return page.evaluate(tt => JSON.parse
 async function books(page, tt = false) { const data = await storage(page, tt); return tt ? Object.values(data || {}) : Object.values(data?.books || {}); }
 try {
   for (const tt of [false, true]) {
+    const p=await start(tt);await b(p,'收起手机').click();
+    const launcher=b(p,'打开灰玻璃小手机');
+    assert.equal((await launcher.textContent()).trim(),'');
+    assert.equal(Math.round((await launcher.boundingBox()).width),44);
+    const cdp=await p.context().newCDPSession(p);
+    let r=await launcher.boundingBox();
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+22,y:r.y+22}]});
+    await p.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:170,y:310}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert(await launcher.isVisible());assert.equal(await p.locator('.overlay').isVisible(),false);
+    r=await launcher.boundingBox();assert(Math.abs(r.x-148)<2);assert(Math.abs(r.y-288)<2);
+    const moved=await p.evaluate(()=>localStorage.getItem('yui-glass-phone.launcher.v1'));
+    await p.reload();await b(p,'收起手机').click();
+    r=await launcher.boundingBox();assert(Math.abs(r.x-148)<2);assert.equal(await p.evaluate(()=>localStorage.getItem('yui-glass-phone.launcher.v1')),moved);
+    // Dock on either side; the visible half remains clickable and draggable.
+    for (const side of ['left','right']) {
+      r=await launcher.boundingBox();const startX=Math.max(4,Math.min((tt?375:393)-4,r.x+22));
+      await p.mouse.move(startX,r.y+22);await p.mouse.down();await p.mouse.move(side==='left'?1:392,400,{steps:5});await p.mouse.up();
+      assert.equal(await launcher.getAttribute('data-dock'),side);assert.equal(await p.locator('.overlay').isVisible(),false);
+      r=await launcher.boundingBox();assert(side==='left'?r.x<0:r.x+r.width>(tt?375:393));
+    }
+    r=await launcher.boundingBox();await p.mouse.click((tt?375:393)-8,r.y+22);assert(await p.locator('.overlay').isVisible());await b(p,'收起手机').click();
+    await p.setViewportSize({width:320,height:568});
+    if(tt)await p.evaluate(()=>ttMock.emitLayout({version:1,safeFrame:{left:0,top:20,width:320,height:500},ime:{keyboardOffset:0}}));
+    r=await launcher.boundingBox();assert.equal(Math.round(r.x),298);assert(r.y>=0&&r.y+r.height<=568);
+    // Cancelling a drag restores its prior position and does not persist a partial move.
+    const before=await p.evaluate(()=>localStorage.getItem('yui-glass-phone.launcher.v1'));
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:310,y:r.y+22}]});await p.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:160,y:220}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+    assert.equal(await p.evaluate(()=>localStorage.getItem('yui-glass-phone.launcher.v1')),before);
+    assert.equal(await launcher.getAttribute('data-dragging'),null);
+    await p.evaluate(async()=>{const m=await import('/index.js');m.onDisable();m.onEnable();});
+    await until(()=>b(p,'收起手机').count(),'re-enabled');await b(p,'收起手机').click();assert.equal(await launcher.count(),1);
+    assert.deepEqual(p.errors,[]);await cdp.detach();await p.close();
+    passed.push(`${tt?'TT':'ST'} launcher: touch hold/drag, icon only, position restore, both edge docks, visible-half click, resize, cancel and disable/re-enable`);
+  }
+  for (const tt of [false, true]) {
     const page = await start(tt), label = tt ? 'TT' : 'ST';
     await page.evaluate(() => localStorage.setItem('yui-pocket.contacts.v1:test-user', '{"old":"untouched"}'));
     await open(page);

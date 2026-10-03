@@ -972,3 +972,14 @@ h1, h2, p { margin: 0; }
 :host([data-compact-frame]) .real-messages { padding-top: 0; padding-bottom: 0; }
 .message-feedback { max-height: 36px; overflow-y: auto; }
 :host([data-compact-frame]) .message-feedback { max-height: 24px; }
+
+/* Chat alone uses a tighter bottom inset; other pages keep their navigation. */
+.page-chat { margin-bottom: 12px; }
+.page-chat .text-composer { margin-bottom: 2px; }
+[data-page="chat"] .home-bar { height: 12px; }
+[data-page="chat"] .home-bar span { height: 2px; }
+:host .sp-phone-screen-cv2[data-page="chat"]::before { height: 12px; }
+.launcher { width: 44px; height: 44px; min-height: 44px; padding: 0; gap: 0; justify-content: center; border-radius: 50%; opacity: .58; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: opacity .15s; }
+.launcher[data-dock="left"], .launcher[data-dock="right"] { opacity: .35; }
+.launcher:focus-visible, .launcher[data-dragging] { opacity: .95; }
+.launcher[data-dragging] { cursor: grabbing; }
