@@ -1,7 +1,14 @@
 // Visual prototype only. No chat/API access, storage or external assets.
 const HOST_ID = 'yui-glass-phone';
-const stylesheet = new URL('./style.css', import.meta.url).href;
+const stylesheet = new URL('./style.css?v=0.2.0', import.meta.url).href;
 const icons = {
+  contacts: '<rect x="5" y="3" width="15" height="18" rx="3"/><path d="M3 7h4M3 12h4M3 17h4"/><circle cx="12.5" cy="9" r="2.3"/><path d="M9 17v-1a3.5 3.5 0 0 1 7 0v1"/>',
+  moments: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="m12 3.5 4 6M20 8l-3 7M17 19l-7-1M6 18l-1-7M5 7l7-3"/>',
+  me: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21v-2a7.5 7.5 0 0 1 15 0v2"/>',
+  heart: '<path d="M20.5 5.5a5 5 0 0 0-7 0L12 7l-1.5-1.5a5 5 0 0 0-7 7L12 21l8.5-8.5a5 5 0 0 0 0-7Z"/>',
+  bookmark: '<path d="M6 3h12v18l-6-4-6 4V3Z"/>',
+  camera: '<path d="m8 6 2-3h4l2 3h4v14H4V6h4Z"/><circle cx="12" cy="13" r="4"/>',
+  wallet: '<rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 9h18M21 12h-6v5h6M6 5V3h12v2"/>',
   message: '<path d="M20 11.4a8 8 0 0 1-8 7.6 9.7 9.7 0 0 1-3.2-.6L4 20l1.3-4.3A7.3 7.3 0 0 1 4 11.4a8 8 0 0 1 16 0Z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/>',
   thread: '<path d="M18.6 7.3C17.5 4.5 15.5 3 12.2 3 6.8 3 4 6.4 4 12s2.8 9 8.2 9c4.6 0 7.8-2.6 7.8-6.1 0-3.2-3.1-5.2-6.6-5.2-3.2 0-5.2 1.5-5.2 3.8 0 1.8 1.3 3 3.1 3 2.7 0 4-2.2 4-5.1 0-3.4-1.3-5-3.8-5-1.5 0-2.8.7-3.5 1.8"/>',
   settings: '<path d="m9 3-1 3-3 .5-2 3 2 2v1l-2 2 2 3 3 .5 1 3h6l1-3 3-.5 2-3-2-2v-1l2-2-2-3-3-.5-1-3Z"/><circle cx="12" cy="12" r="3.2"/>',
@@ -69,6 +76,8 @@ function mount() {
   const screen = $('.sp-phone-screen-cv2');
   let current = 'home';
   let activeChat = 'rain';
+  let chatBack = 'messages';
+  let settingsBack = 'home';
   let lastFocus;
   let toastTimeout;
   let clockInterval;
@@ -91,7 +100,7 @@ function mount() {
     $('.toast').hidden = false;
     toastTimeout = setTimeout(() => { $('.toast').hidden = true; }, 2500);
   };
-  const toolbar = (title, subtitle = '', back = 'home', action = '') => `<header class="toolbar"><button type="button" data-go="${back}" class="icon-button" aria-label="${back === 'messages' ? '返回消息列表' : back === 'chat' ? '返回聊天' : '返回桌面'}">${icon('back')}</button><div class="toolbar-title"><h1>${title}</h1>${subtitle ? `<span>${subtitle}</span>` : ''}</div>${action || '<span class="toolbar-spacer"></span>'}</header>`;
+  const toolbar = (title, subtitle = '', back = 'home', action = '') => `<header class="toolbar"><button type="button" data-go="${back}" class="icon-button" aria-label="${({messages:'返回消息列表',contacts:'返回联系人',me:'返回我',chat:'返回聊天'})[back] || '返回桌面'}">${icon('back')}</button><div class="toolbar-title"><h1>${title}</h1>${subtitle ? `<span>${subtitle}</span>` : ''}</div>${action || '<span class="toolbar-spacer"></span>'}</header>`;
   function home() {
     return `<section class="home-page"><div class="home-clock"><div class="home-date"></div><div class="home-time"></div><div class="home-caption"><span></span> 把日常，轻轻收好 <span></span></div></div>
       <div class="home-orbit" aria-hidden="true"><span>✦</span><i></i></div>
@@ -99,7 +108,7 @@ function mount() {
       <div class="desktop-bottom"><span class="page-dot"></span><span></span></div></section>`;
   }
   function messages() {
-    return `${toolbar('消息', 'MESSAGES')}<div class="list-page"><label class="search">${icon('search')}<input type="search" placeholder="搜索联系人" aria-label="搜索示例联系人" autocomplete="off"></label><div class="list-label"><span>最近聊天</span><span>03</span></div><div class="conversation-list">${conversations.map(c => `<button type="button" class="conversation" data-chat="${c.id}" data-name="${people[c.id].name}" aria-label="打开${people[c.id].name}${c.id === 'group' ? '群聊' : '聊天'}">${avatar(c.id)}<span class="conversation-content"><span class="conversation-top"><strong>${people[c.id].name}</strong><time>${c.time}</time></span><span class="conversation-preview">${c.text}</span><span class="conversation-meta">${c.note || ' '}</span></span>${c.unread ? `<span class="unread">${c.unread}</span>` : ''}</button>`).join('')}</div><p class="empty-search" hidden>没有找到这个联系人</p><p class="list-footnote">只展示示例消息 · 轻点进入聊天</p></div>`;
+    return `${toolbar('消息', 'MESSAGES')}<div class="list-page"><label class="search">${icon('search')}<input type="search" placeholder="搜索联系人" aria-label="搜索示例联系人" autocomplete="off"></label><div class="list-label"><span>最近聊天</span><span>03</span></div><div class="conversation-list">${conversations.map(c => `<button type="button" class="conversation" data-chat="${c.id}" data-name="${people[c.id].name}" aria-label="打开${people[c.id].name}${c.id === 'group' ? '群聊' : '聊天'}">${avatar(c.id)}<span class="conversation-content"><span class="conversation-top"><strong>${people[c.id].name}</strong><time>${c.time}</time></span><span class="conversation-preview">${c.text}</span><span class="conversation-meta">${c.note || ' '}</span></span>${c.unread ? `<span class="unread">${c.unread}</span>` : ''}</button>`).join('')}</div><p class="empty-search" hidden>没有找到这个联系人</p></div>`;
   }
   function bubble(sender, content, {self = false, kind = 'text'} = {}) {
     const person = self ? 'self' : sender;
@@ -121,24 +130,62 @@ function mount() {
     } else {
       content = bubble(id,'路过花店，想起你说喜欢白色。') + bubble('self','所以，你带了一束回来？',{self:true}) + bubble(id,'嗯。等见面的时候给你。',{kind:'voice'}) + bubble(id,'给今天的一点小小快乐。',{kind:'transfer'}) + bubble('self','那我也有一件小事想告诉你。',{self:true});
     }
-    return `${toolbar(people[id].name, group ? '3 位成员 · 示例群聊' : '示例聊天', 'messages', `<button type="button" class="icon-button" data-go="details" aria-label="聊天资料">${icon('more')}</button>`)}<div class="chat-scroll"><div class="sp-time-divider-cv2"><span class="sp-time-divider-text-cv2">今天 17:42</span></div>${content}</div><div class="composer"><button type="button" data-hint="附件功能以后再做，先看看现在的样子。" class="icon-button" aria-label="添加附件">${icon('plus')}</button><button type="button" class="composer-placeholder" data-hint="现在是美化预览，还不能发送消息。">小如思念送達中······ ♡</button><button type="button" data-hint="现在是美化预览，还不能发送消息。" class="send-button" aria-label="发送消息（预览）">${icon('send')}</button></div>`;
+    return `${toolbar(people[id].name, group ? '3 位成员 · 示例群聊' : '示例聊天', chatBack, `<button type="button" class="icon-button" data-go="details" aria-label="聊天资料">${icon('more')}</button>`)}<div class="chat-scroll"><div class="sp-time-divider-cv2"><span class="sp-time-divider-text-cv2">今天 17:42</span></div>${content}</div><div class="composer"><button type="button" data-hint="附件功能以后再做，先看看现在的样子。" class="icon-button" aria-label="添加附件">${icon('plus')}</button><button type="button" class="composer-placeholder" data-hint="现在是美化预览，还不能发送消息。">小如思念送達中······ ♡</button><button type="button" data-hint="现在是美化预览，还不能发送消息。" class="send-button" aria-label="发送消息（预览）">${icon('send')}</button></div>`;
   }
   function thread() {
     return `${toolbar('Thread','A LITTLE SPACE')}<div class="placeholder-page"><div class="placeholder-icon">${icon('thread')}</div><h2>留一处空白</h2><p>想说的话，遇见的小事。<br>以后，慢慢放在这里。</p><span class="quiet-pill">待续</span></div>`;
   }
   function settings() {
-    return `${toolbar('设置','MAKE IT YOURS')}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃 · 第一版</span></div><span class="little-star">✦</span></section><h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">其余设置，以后慢慢补齐。<br>当前仅预览外观，壁纸选择不保存。</p><div class="version">YUI GLASS PHONE <span>0.1.0</span></div></div>`;
+    return `${toolbar('设置','MAKE IT YOURS',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃 · 第一版</span></div><span class="little-star">✦</span></section><h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">其余设置，以后慢慢补齐。<br>当前仅预览外观，壁纸选择不保存。</p><div class="version">YUI GLASS PHONE <span>0.2.0</span></div></div>`;
   }
   function details() {
     return `${toolbar('聊天资料','','chat')}<div class="detail-page">${avatar(activeChat)}<h2>${people[activeChat].name}</h2><p>${activeChat === 'group' ? '把大家的小日常，收在一起。' : '有些小事，只想和你分享。'}</p><span class="quiet-pill">示例${activeChat === 'group' ? '群聊 · 3 人' : '联系人'}</span><div class="detail-note">头像、备注与聊天背景<br>后续在这里设置</div></div>`;
   }
+
+  const mainTabs = [
+    ['messages','message','消息'], ['contacts','contacts','联系人'],
+    ['moments','moments','朋友圈'], ['me','me','我'],
+  ];
+  function bottomNav(selected) {
+    return '<nav class="social-nav" aria-label="消息应用导航">' + mainTabs.map(([target, glyph, label]) =>
+      '<button type="button" data-go="' + target + '"' + (selected === target ? ' aria-current="page"' : '') + '><span class="nav-symbol">' + icon(glyph) + '</span><span>' + label + '</span></button>'
+    ).join('') + '</nav>';
+  }
+  function menuRow(glyph, label, hint, go) {
+    return '<button type="button" class="menu-row" ' + (go ? 'data-go="'+go+'"' : 'data-hint="'+hint+'"') + '><span class="menu-icon">'+icon(glyph)+'</span><span>'+label+'</span>'+icon('arrow')+'</button>';
+  }
+  function contacts() {
+    return toolbar('联系人','CONTACTS') + '<div class="social-scroll contacts-page"><label class="search">'+icon('search')+'<input type="search" placeholder="搜索联系人" aria-label="搜索示例联系人" autocomplete="off"></label><div class="glass-menu">'
+      + menuRow('plus','新的朋友','添加朋友功能以后再做，先看看页面。')
+      + '<button type="button" class="menu-row" data-chat="group"><span class="menu-icon">'+icon('contacts')+'</span><span>群聊</span><small>1</small>'+icon('arrow')+'</button></div>'
+      + [['L','rain'],['W','evening']].map(([letter,id]) => '<section class="contact-section"><h2>'+letter+'</h2><button type="button" class="contact-row" data-chat="'+id+'" data-name="'+people[id].name+'">'+avatar(id)+'<span>'+people[id].name+'</span>'+icon('arrow')+'</button></section>').join('')
+      + '<p class="empty-search" hidden>没有找到这个联系人</p><p class="contacts-count">2 位联系人</p></div>';
+  }
+  function moments() {
+    const post = (id, text, time, art = false) => '<article class="moment">'+avatar(id,true)+'<div class="moment-content"><h2>'+people[id].name+'</h2><p>'+text+'</p>'+(art ? '<div class="moment-art" role="img" aria-label="灰蓝暮色与一弯月亮的示意插画"><span>一小片晚风</span></div>' : '')+'<div class="moment-actions"><time>'+time+'</time><button type="button" aria-label="赞'+people[id].name+'的动态" data-hint="点赞功能以后再接入。">'+icon('heart')+'</button><button type="button" aria-label="评论'+people[id].name+'的动态" data-hint="评论功能以后再接入。">'+icon('message')+'</button></div></div></article>';
+    return toolbar('朋友圈','MOMENTS','home','<button type="button" class="icon-button" aria-label="发布朋友圈" data-hint="发布功能以后再做，先看看朋友圈的样子。">'+icon('camera')+'</button>')
+      + '<div class="social-scroll moments-page"><div class="moments-cover"><span class="cover-caption">把平凡的日子，留在这里。</span><div><strong>我</strong>'+avatar('self')+'</div></div><div class="moments-feed">'
+      + post('evening','今天的天空，有一点像没说完的话。','12 分钟前',true)
+      + post('rain','买了一束白色的花。\n想让今天也慢一点。','1 小时前')
+      + '<p class="feed-end">日常，还在继续</p></div></div>';
+  }
+  function me() {
+    return toolbar('我','MY LITTLE WORLD') + '<div class="social-scroll me-page"><button type="button" class="profile-card" data-hint="头像、昵称和个人资料以后在这里编辑。" aria-label="编辑我的资料">'+avatar('self')+'<span class="profile-text"><strong>我</strong><small>ID · yui</small><span>把日常，轻轻收好</span></span>'+icon('arrow')+'</button><div class="glass-menu">'
+      + menuRow('wallet','钱包','钱包暂为占位，后续再做功能。') + '</div><div class="glass-menu">'
+      + menuRow('bookmark','收藏','收藏暂为占位，后续再做功能。')
+      + menuRow('image','相册','相册暂为占位，后续再做功能。')
+      + menuRow('moments','朋友圈','', 'moments') + '</div><div class="glass-menu">'
+      + menuRow('settings','设置','', 'settings') + '</div></div>';
+  }
+
   function navigate(target, focus = true) {
     clearTimeout(toastTimeout);
     $('.toast').hidden = true;
+    if (target === 'settings' && current !== 'settings') settingsBack = current === 'me' ? 'me' : 'home';
     current = target;
     page.className = `page page-${target}`;
     screen.dataset.page = target;
-    page.innerHTML = ({home, messages, chat:() => chat(activeChat), thread, settings, details}[target] || home)();
+    page.innerHTML = ({home, messages, contacts, moments, me, chat:() => chat(activeChat), thread, settings, details}[target] || home)() + (mainTabs.some(([id]) => id === target) ? bottomNav(target) : '');
     clock();
     if (focus) {
       const title = page.querySelector('h1') || page.querySelector('button');
@@ -177,7 +224,7 @@ function mount() {
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.go) navigate(button.dataset.go);
-    if (button.dataset.chat) { activeChat = button.dataset.chat; navigate('chat'); }
+    if (button.dataset.chat) { chatBack = current === 'contacts' ? 'contacts' : 'messages'; activeChat = button.dataset.chat; navigate('chat'); }
     if (button.dataset.hint) toast(button.dataset.hint);
     if (button.dataset.wallpaper) {
       wallpaper = button.dataset.wallpaper;
@@ -190,7 +237,9 @@ function mount() {
     if (!event.target.matches('input[type="search"]')) return;
     const query = event.target.value.trim().toLowerCase();
     let shown = 0;
-    page.querySelectorAll('.conversation').forEach(row => { row.hidden = !row.dataset.name.toLowerCase().includes(query); if (!row.hidden) shown++; });
+    page.querySelectorAll('.conversation, .contact-row').forEach(row => { row.hidden = !row.dataset.name.toLowerCase().includes(query); if (!row.hidden) shown++; });
+    page.querySelectorAll('.contact-section').forEach(section => { section.hidden = !section.querySelector('.contact-row:not([hidden])'); });
+    if ($('.contacts-count')) $('.contacts-count').textContent = shown + ' 位联系人';
     $('.empty-search').hidden = shown > 0;
   });
   shadow.addEventListener('keydown', event => {
