@@ -3,8 +3,10 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
+const engines = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
+const engine = engines[process.env.BROWSER_ENGINE || 'chromium'];
 const root = fileURLToPath(new URL('../', import.meta.url));
+await mkdir(path.join(root,'test-results'),{recursive:true});
 const server = createServer(async (req, res) => {
   const file = path.resolve(root, '.' + new URL(req.url, 'http://test').pathname);
   if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
@@ -13,7 +15,8 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}) });
+const browser = await engine.launch({ headless: true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}) });
+console.log(`Browser: ${process.env.BROWSER_ENGINE || 'chromium'} ${browser.version()}`);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64');
 const passed = [];
 async function until(check, label) { const end = Date.now() + 6000; while (Date.now() < end) { if (await check()) return; await new Promise(r => setTimeout(r, 30)); } throw Error(`Timed out: ${label}`); }
@@ -26,6 +29,9 @@ async function start(tt = false, suffix = '') {
   if (tt) await page.addInitScript({ content: await readFile(path.join(root, 'tests/tt-mock.js'), 'utf8') });
   else await page.route('**/api/users/me', async route => route.fulfill({ json: { handle: await page.evaluate(() => profileMock.account) } }));
   await page.route('**/thumbnail?**', route => route.fulfill({ contentType: 'image/png', body: png }));
+  // Optional regression control: reproduce the pre-0.5.3 percentage/flex layout
+  // on WebKit 17.4 without checking out or loading old production modules.
+  if (process.env.LEGACY_LAYOUT) await page.route('**/style.css?*', async route => route.fulfill({contentType:'text/css',body:await readFile(path.join(root,'style.css'),'utf8')+'\n.presentation{height:auto;max-height:100%}.sp-phone-wrap-cv2{height:550px;max-height:none;flex:0 1 auto}.sp-phone-screen-cv2{position:relative;inset:auto;width:100%;height:100%}:host([data-short-frame]) .presentation{max-height:100%}'}));
   await page.goto(base + '/preview.html' + suffix);
   return page;
 }
@@ -61,7 +67,18 @@ try {
         {version:1,safeFrame:{left:0,top:120,width:393,height:240},ime:{keyboardOffset:0}},
         {version:1,safeFrame:{left:0,top:0,width:320,height:568},ime:{keyboardOffset:220}},
       ]) {
+        await textBox(p).focus();
         await p.evaluate(frame=>ttMock.emitLayout(frame),frame);
+        await p.waitForTimeout(100);
+        // Do not fill/click after resizing: those actions may scroll a clipped control
+        // into view and hide the keyboard-open regression we are trying to detect.
+        const geometry=await p.evaluate(()=>{const s=document.querySelector('#yui-glass-phone').shadowRoot;return Object.fromEntries(['.sp-phone-wrap-cv2','.sp-phone-screen-cv2','.toolbar','.text-composer','.home-bar'].map(k=>[k,s.querySelector(k).getBoundingClientRect().toJSON()]));});
+        const shell=geometry['.sp-phone-wrap-cv2'], screen=geometry['.sp-phone-screen-cv2'];
+        if(process.env.LEGACY_LAYOUT) { console.log('Legacy keyboard geometry:',JSON.stringify(geometry));await p.screenshot({path:path.join(root,'test-results/legacy-keyboard.png')}); }
+        for(const selector of ['.sp-phone-screen-cv2','.toolbar','.text-composer','.home-bar']) {
+          const r=geometry[selector];assert(r.top>=shell.top && r.bottom<=shell.bottom,`${selector} must fit the shell immediately after keyboard opens`);
+        }
+        assert(screen.height<=shell.height,'inner screen shrinks together with shell');
         for (const draft of ['键盘草稿🙂\n第二行\n第三行\n第四行\n第五行','字'.repeat(9500),'字'.repeat(10001)]) {
           await textBox(p).fill(draft);
           await p.waitForTimeout(100);

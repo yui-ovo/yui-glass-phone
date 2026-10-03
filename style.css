@@ -734,7 +734,7 @@ h1, h2, p { margin: 0; }
 .launcher { display: flex; align-items: center; gap: 7px; right: max(12px, env(safe-area-inset-right)); bottom: calc(110px + env(safe-area-inset-bottom)); padding: 10px 13px; min-height: 44px; border: 1px solid rgba(255,255,255,.18); border-radius: 19px; background: rgba(45,45,53,.86); color: #e7e7ed; box-shadow: 0 6px 22px #0005, inset 0 1px #ffffff12; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 11px; letter-spacing: 1px; }
 .launcher svg { width: 19px; height: 19px; }
 .overlay { position: fixed; top: var(--view-top,0px); left: 0; right: 0; height: var(--view-height,100dvh); display: flex; align-items: center; justify-content: center; padding: max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); pointer-events: auto; background: rgba(12,12,16,.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overscroll-behavior: contain; }
-.presentation { width: 320px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: stretch; outline: none; }
+.presentation { width: 320px; max-width: 100%; height: 100%; max-height: 630px; display: flex; flex-direction: column; align-items: stretch; outline: none; }
 .outside-bar { display: flex; justify-content: space-between; align-items: center; height: 44px; flex-shrink: 0; padding: 0 4px 0 12px; color: rgba(238,238,246,.6); }
 .outside-bar > span { font-size: 9px; letter-spacing: 1.5px; }
 .outside-bar i { margin: 0 4px; font-style: normal; opacity: .5; }
@@ -742,8 +742,10 @@ h1, h2, p { margin: 0; }
 .close { width: 44px; height: 44px; display: grid; place-items: center; }
 .close svg { width: 18px; height: 18px; }
 .outside-note { text-align: center; padding-top: 14px; height: 36px; flex-shrink: 0; font-size: 9px; letter-spacing: 1.2px; color: #ffffff55; }
-.sp-phone-wrap-cv2 { width: 320px; max-width: 100%; height: 550px; min-height: 0; flex-shrink: 1; margin: 0; isolation: isolate; }
-.sp-phone-screen-cv2 { display: flex; flex-direction: column; }
+.sp-phone-wrap-cv2 { width: 320px; max-width: 100%; height: auto; max-height: 550px; min-height: 0; flex: 1 1 0; margin: 0; isolation: isolate; }
+/* No percentage height inside a shrinking flex item: iOS must not keep the
+   pre-keyboard screen height and clip the composer/home indicator together. */
+.sp-phone-screen-cv2 { position: absolute; inset: 2px; width: auto; height: auto; display: flex; flex-direction: column; }
 .sp-phone-screen-cv2::before { height: 28px; }
 .wallpaper { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 15% 0,rgba(157,157,169,.19),transparent 55%), radial-gradient(ellipse at 100% 90%,rgba(83,91,104,.24),transparent 70%), linear-gradient(155deg,rgba(50,50,58,.6),rgba(27,27,34,.85)); transition: opacity .25s; }
 [data-page="home"] .wallpaper { background: radial-gradient(ellipse at 15% 0,rgba(181,181,193,.24),transparent 60%), radial-gradient(ellipse at 100% 90%,rgba(101,111,128,.34),transparent 65%),linear-gradient(155deg,rgba(62,62,72,.54),rgba(28,28,35,.76)); }
@@ -964,6 +966,7 @@ h1, h2, p { margin: 0; }
 /* The native frame can be shorter than the layout viewport used by @media. */
 :host([data-native-frame]) .overlay { padding: 12px 10px; }
 :host([data-short-frame]) .outside-note { display: none; }
+:host([data-short-frame]) .presentation { max-height: 594px; }
 :host([data-compact-frame]) .outside-bar { height: 32px; }
 :host([data-compact-frame]) .outside-bar .close { height: 32px; }
 :host([data-compact-frame]) .status-bar { height: 28px; }

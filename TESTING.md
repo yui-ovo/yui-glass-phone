@@ -1,3 +1,19 @@
+# 0.5.3 旧 WebKit 对照与回归
+
+用户反馈环境：TT 2.3.0，iOS 版本约 17.5.1。0.5.2 在用户录屏中仍失败。
+
+## 可复现证据
+
+- Playwright 1.44.1 / 桌面 WebKit 17.4，保留旧版 flex + 内屏 height:100% 作为对照：可用框 300px，外壳高 244px，内屏仍高 544px。`screen must fit the shell immediately after keyboard opens` 断言失败。
+- 新布局同一套测试通过：外层高度明确、机身分配剩余空间、内屏 absolute 四边定位。键盘弹出后无需再次输入或由测试自动滚动，顶栏、输入栏、白条均在机身内。
+- WebKit 17.4 完整消息浏览器测试通过：ST/TT 模拟的保存/恢复/隔离/重试/资料保留以及键盘 240/300px、Android inset 场景。
+- Chrome 完整通讯录、悬浮入口、消息浏览器回归通过。新布局截图已检查。
+- WebKit 26.5 在旧布局上未复现本问题，不能用最新引擎通过替代旧 iOS 兼容验证。桌面 WebKit 17.4 也不等于 iPhone iOS 17.5.1 真机，最终用户验收仍待确认。
+
+`tests/messages-browser.mjs` 支持 `BROWSER_ENGINE=webkit`。通过 `PLAYWRIGHT_MODULE` 和 `PLAYWRIGHT_BROWSERS_PATH` 指向对应 Playwright/WebKit 环境，清除 Chrome 专用 `BROWSER_EXECUTABLE` 后运行。可设 `LEGACY_LAYOUT=1` 使用旧高度样式作为负向对照（旧 WebKit 上预期失败）；正常测试不要设置此项。浏览器依赖仅用于本地测试，不随扩展发布。
+
+---
+
 # 0.5.2 位置与悬浮入口回归
 
 - 在独立 Chrome 的 ST/TT 模拟页面中派发真实触摸输入：长按 350ms 后拖动，松手不误打开；刷新后恢复位置。
