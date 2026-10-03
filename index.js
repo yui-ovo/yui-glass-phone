@@ -1,8 +1,10 @@
-// Visual prototype. Only checks this extension manifest when the manager closes.
+// Gray glass shell with independent per-chat profiles; fixed samples require explicit demo mode.
 import { installUpdateRefresh } from "./update-refresh.js";
-const VERSION = "0.3.0";
+import { createDirectory } from './modules/directory.js';
+import { ttReady, ttHost, ttFrame } from './modules/host.js';
+const VERSION = "0.4.0";
 const HOST_ID = 'yui-glass-phone';
-const stylesheet = new URL('./style.css?v=0.3.0', import.meta.url).href;
+const stylesheet = new URL('./style.css?v=0.4.0', import.meta.url).href;
 const icons = {
   contacts: '<rect x="5" y="3" width="15" height="18" rx="3"/><path d="M3 7h4M3 12h4M3 17h4"/><circle cx="12.5" cy="9" r="2.3"/><path d="M9 17v-1a3.5 3.5 0 0 1 7 0v1"/>',
   moments: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="m12 3.5 4 6M20 8l-3 7M17 19l-7-1M6 18l-1-7M5 7l7-3"/>',
@@ -41,7 +43,7 @@ const conversations = [
   {id:'evening', text:'给你留了一小块今天的天空。', time:'昨天', unread:0, note:''},
 ];
 function avatar(id, small = false) {
-  const person = people[id] || people.rain;
+  const person = people[id] || {name:'未知人物', glyph:'人', tone:'sage'};
   return `<span class="avatar ${person.tone} ${small ? 'small' : ''}" aria-hidden="true">${person.glyph}</span>`;
 }
 
@@ -55,8 +57,8 @@ function mount() {
     <link rel="stylesheet" href="${stylesheet}">
     <button class="launcher" type="button" aria-label="打开灰玻璃小手机" title="灰玻璃小手机"><span>${icon('phone')}</span><span>小手机</span></button>
     <div class="overlay" hidden>
-      <section class="presentation" role="dialog" aria-modal="true" aria-label="灰玻璃小手机 · 美化预览" tabindex="-1">
-        <div class="outside-bar"><span>灰玻璃小手机 <em>美化预览</em></span><button class="close" type="button" aria-label="收起手机">${icon('close')}</button></div>
+      <section class="presentation" role="dialog" aria-modal="true" aria-label="灰玻璃小手机" tabindex="-1">
+        <div class="outside-bar"><span>灰玻璃小手机 <em class="mode-label">剧情通讯录</em></span><button class="close" type="button" aria-label="收起手机">${icon('close')}</button></div>
         <div class="sp-phone-wrap-cv2">
           <div class="sp-phone-screen-cv2">
             <div class="wallpaper"></div>
@@ -77,6 +79,8 @@ function mount() {
   const launcher = $('.launcher');
   const screen = $('.sp-phone-screen-cv2');
   let current = 'home';
+  let demo = false, disposed = false, nativeFrame, removeLayout;
+  let directory;
   let activeChat = 'rain';
   let chatBack = 'messages';
   let settingsBack = 'home';
@@ -93,8 +97,10 @@ function mount() {
   };
   const resize = () => {
     const viewport = window.visualViewport;
-    host.style.setProperty('--view-height', `${viewport?.height || window.innerHeight}px`);
-    host.style.setProperty('--view-top', `${viewport?.offsetTop || 0}px`);
+    host.style.setProperty('--view-height', `${nativeFrame?.height ?? viewport?.height ?? window.innerHeight}px`);
+    host.style.setProperty('--view-width', `${nativeFrame?.width ?? viewport?.width ?? window.innerWidth}px`);
+    host.style.setProperty('--view-left', `${nativeFrame?.left ?? viewport?.offsetLeft ?? 0}px`);
+    host.style.setProperty('--view-top', `${nativeFrame?.top ?? viewport?.offsetTop ?? 0}px`);
   };
   const toast = (text) => {
     clearTimeout(toastTimeout);
@@ -106,7 +112,7 @@ function mount() {
   function home() {
     return `<section class="home-page"><div class="home-clock"><div class="home-date"></div><div class="home-time"></div><div class="home-caption"><span></span> 把日常，轻轻收好 <span></span></div></div>
       <div class="home-orbit" aria-hidden="true"><span>✦</span><i></i></div>
-      <div class="desktop-apps">${[['messages','message','消息'],['thread','thread','动态'],['settings','settings','设置']].map(([target,name,label]) => `<button type="button" class="app" data-go="${target}" aria-label="打开${label}"><span class="app-icon">${icon(name)}${target === 'messages' ? '<b class="app-dot"></b>' : ''}</span><span>${label}</span></button>`).join('')}</div>
+      <div class="desktop-apps">${[['messages','message','消息'],['thread','thread','动态'],['settings','settings','设置']].map(([target,name,label]) => `<button type="button" class="app" data-go="${target}" aria-label="打开${label}"><span class="app-icon">${icon(name)}${demo && target === 'messages' ? '<b class="app-dot"></b>' : ''}</span><span>${label}</span></button>`).join('')}</div>
       <div class="desktop-bottom"><span class="page-dot"></span><span></span></div></section>`;
   }
   function sampleSearchText(id) {
@@ -143,7 +149,7 @@ function mount() {
     return `${toolbar('动态','')}<div class="placeholder-page"><div class="placeholder-icon">${icon('thread')}</div><h2>留一处空白</h2><p>想说的话，遇见的小事。<br>以后，慢慢放在这里。</p><span class="quiet-pill">待续</span></div>`;
   }
   function settings() {
-    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃 · 第一版</span></div><span class="little-star">✦</span></section><h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">其余设置，以后慢慢补齐。<br>当前仅预览外观，壁纸选择不保存。</p><div class="version">灰玻璃小手机 <span>0.3.0</span></div></div>`;
+    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃</span></div><span class="little-star">✦</span></section><h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">壁纸选择仅在本次打开期间保留。</p><button type="button" class="profile-action" data-demo="toggle">${demo ? '退出样式演示' : '独立样式演示'}</button><p class="settings-note">样式演示与剧情人物资料分开，不保存示例记录。</p><div class="version">灰玻璃小手机 <span>0.4.0</span></div></div>`;
   }
   function details() {
     return `${toolbar('聊天资料','','chat')}<div class="detail-page">${avatar(activeChat)}<h2>${people[activeChat].name}</h2><p>${activeChat === 'group' ? '把大家的小日常，收在一起。' : '有些小事，只想和你分享。'}</p><span class="quiet-pill">示例${activeChat === 'group' ? '群聊 · 3 人' : '联系人'}</span><div class="detail-note">头像、备注与聊天背景<br>后续在这里设置</div></div>`;
@@ -185,14 +191,22 @@ function mount() {
       + menuRow('settings','设置','', 'settings') + '</div></div>';
   }
 
-  function navigate(target, focus = true) {
+  function navigate(target, focus = true, force = false) {
+    if (disposed) return;
+    if (!directory?.leave(force)) return;
     clearTimeout(toastTimeout);
     $('.toast').hidden = true;
     if (target === 'settings' && current !== 'settings') settingsBack = current === 'me' ? 'me' : 'home';
     current = target;
     page.className = `page page-${target}`;
     screen.dataset.page = target;
-    page.innerHTML = ({home, messages, contacts, moments, me, chat:() => chat(activeChat), thread, settings, details}[target] || home)() + (mainTabs.some(([id]) => id === target) ? bottomNav(target) : '');
+    if (!demo && directory.handles(target)) {
+      page.replaceChildren(directory.render(target));
+      if (mainTabs.some(([id]) => id === target)) page.insertAdjacentHTML('beforeend', bottomNav(target));
+    } else {
+      page.innerHTML = ({home, messages, contacts, moments, me, chat:() => chat(activeChat), thread, settings, details}[target] || home)() + (mainTabs.some(([id]) => id === target) ? bottomNav(target) : '');
+    }
+    $('.mode-label').textContent = demo ? '样式演示 · 不保存' : '剧情通讯录';
     clock();
     if (focus) {
       const title = page.querySelector('h1') || page.querySelector('button');
@@ -218,7 +232,7 @@ function mount() {
     window.visualViewport?.addEventListener('resize', resize);
     window.visualViewport?.addEventListener('scroll', resize);
     window.addEventListener('resize', resize);
-    navigate(current,false);
+    if (!page.childElementCount) navigate(current,false);
     panel.focus({preventScroll:true});
     clearInterval(clockInterval);
     clockInterval = setInterval(clock, 15000);
@@ -230,6 +244,7 @@ function mount() {
   page.addEventListener('click', event => {
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.dataset.demo) { if (!directory.leave()) return; demo = !demo; navigate(demo ? 'messages' : 'home'); return; }
     if (button.dataset.go) navigate(button.dataset.go);
     if (button.dataset.chat) { chatBack = current === 'contacts' ? 'contacts' : 'messages'; activeChat = button.dataset.chat; navigate('chat'); }
     if (button.dataset.hint) toast(button.dataset.hint);
@@ -241,7 +256,7 @@ function mount() {
     }
   });
   page.addEventListener('input', event => {
-    if (!event.target.matches('input[type="search"]')) return;
+    if (!demo || !event.target.matches('input[type="search"]')) return;
     const query = event.target.value.trim().toLowerCase();
     let shown = 0;
     page.querySelectorAll('.conversation, .contact-row').forEach(row => { row.hidden = !(row.dataset.search || row.dataset.name).toLowerCase().includes(query); if (!row.hidden) shown++; });
@@ -253,15 +268,52 @@ function mount() {
     if (overlay.hidden) return;
     if (event.key === 'Escape') { event.preventDefault(); close(); }
     if (event.key === 'Tab') {
-      const controls = [...overlay.querySelectorAll('button, input')].filter(el => !el.disabled && el.getClientRects().length);
+      const controls = [...overlay.querySelectorAll('button, input, textarea, select, summary')].filter(el => !el.disabled && el.getClientRects().length);
       const first = controls[0]; const last = controls.at(-1);
       const active = shadow.activeElement;
       if (event.shiftKey && (active === first || !controls.includes(active))) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && (active === last || !controls.includes(active))) { event.preventDefault(); first?.focus(); }
     }
   });
-  installUpdateRefresh({ version: VERSION, manifestUrl: new URL('./manifest.json', import.meta.url).href });
+  directory = createDirectory({ window, document, navigate: (target, focus, force) => {
+    if (demo || !directory?.handles(current)) return;
+    navigate(target, focus, force);
+  }, icon, notify: toast });
+  const removeRefresh = installUpdateRefresh({ version: VERSION, manifestUrl: new URL('./manifest.json', import.meta.url).href,
+    canReload: () => !directory.dirty(), onDeferred: () => toast('更新已就绪，请先保存或取消资料，再关闭扩展管理器刷新') });
+  const beforeUnload = event => { if (directory.dirty()) { event.preventDefault(); event.returnValue = ''; } };
+  window.addEventListener('beforeunload', beforeUnload);
+  const layout = ttHost(window)?.api?.layout;
+  if (layout?.subscribe) {
+    Promise.resolve().then(() => layout.subscribe(snapshot => { if (!disposed) { nativeFrame = ttFrame(snapshot); resize(); } }))
+      .then(remove => { if (disposed) remove(); else removeLayout = remove; }).catch(() => {});
+  }
+  function dispose() {
+    if (disposed) return; disposed = true; close(); removeRefresh(); removeLayout?.(); directory.dispose();
+    window.removeEventListener('beforeunload', beforeUnload); host.remove();
+  }
+  const observer = new MutationObserver(() => { if (!host.isConnected) { observer.disconnect(); dispose(); } });
+  observer.observe(document.body, { childList: true });
+  const cleanup = () => { observer.disconnect(); dispose(); };
+  host.__dispose = cleanup;
   if (document.documentElement.dataset.yuiPreview === 'true') open();
+  return cleanup;
 }
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
-else mount();
+const INSTANCE = Symbol.for('yui-glass-phone.instance');
+let enabled = false, epoch = 0, disposeInstance, cancelReady;
+export function onDisable() { enabled = false; epoch++; cancelReady?.(); cancelReady = undefined; disposeInstance?.(); disposeInstance = undefined; window.removeEventListener('pagehide', onDisable); if (window[INSTANCE] === onDisable) delete window[INSTANCE]; }
+export function onEnable() {
+  if (enabled) return;
+  window[INSTANCE]?.(); window[INSTANCE] = onDisable;
+  enabled = true; const ticket = ++epoch;
+  window.addEventListener('pagehide', onDisable);
+  const domReady = document.readyState === 'loading' ? new Promise(resolve => { const ready = () => { cancelReady = undefined; resolve(); }; document.addEventListener('DOMContentLoaded', ready, {once:true}); cancelReady = () => document.removeEventListener('DOMContentLoaded', ready); }) : Promise.resolve();
+  void domReady.then(() => ttReady(window)).then(() => {
+    if (!enabled || ticket !== epoch) return;
+    document.getElementById(HOST_ID)?.__dispose?.();
+    disposeInstance = mount();
+  }).catch(error => { console.error('[yui-glass-phone] 启动失败', error); onDisable(); });
+}
+export const onActivate = onEnable;
+export const onDelete = onDisable;
+onEnable();
