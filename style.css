@@ -1034,7 +1034,8 @@ h1, h2, p { margin: 0; }
 .message-selected .sp-message-bubble-cv2 { outline:1px solid #cfc4df99; }
 .message-selector { width:17px; height:17px; flex-shrink:0; accent-color:#b5a8c4; align-self:center; }
 .message-selectable .sp-message-main-cv2 { max-width:calc(100% - 68px); }
-.message-quote { display:block; max-height:65px; overflow:hidden; white-space:pre-wrap; border-left:2px solid #b9a9c299; background:#14141a25; color:#d2ccdb99; font-size:10px; line-height:1.5; padding:5px 7px; margin:0 0 6px; border-radius:4px; }
+.message-quote { display:block; align-self:flex-start; width:fit-content; max-width:100%; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; background:#ffffff0c; color:#c6c2cc99; font-size:10px; line-height:1.5; padding:4px 7px; margin-top:5px; border-radius:4px; }
+.sp-message-main-cv2.self > .message-quote { align-self:flex-end; }
 .message-quote-preview { display:flex; align-items:center; gap:6px; margin:3px 17px; padding:4px 8px; border-left:2px solid #c6b8d4; background:#ffffff08; border-radius:6px; font-size:10px; flex-shrink:0; }
 .message-quote-preview span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .quote-cancel { width:28px; height:28px; }

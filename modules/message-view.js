@@ -58,12 +58,13 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
     const line = el('div', 'sp-message-row-cv2' + suffix), text = el('div', 'sp-message-bubble-cv2' + suffix, message.text);
     if (!pending) { text.tabIndex = 0; text.title = '长按或右键打开消息菜单'; }
+    line.append(text); main.append(line);
     if (message.replyTo) {
       const original = quotedMessage(messenger.history(), message);
-      const quote = el('span', 'message-quote', original ? `${original.sender.kind === 'self' ? self.name : person.name}：${original.text}` : '原消息已删除');
-      text.prepend(quote);
+      const quote = el('div', 'message-quote', original ? `${original.sender.kind === 'self' ? self.name : person.name}：${original.text}` : '原消息已删除');
+      quote.title = quote.textContent; quote.setAttribute('aria-label', `引用：${quote.textContent}`);
+      main.append(quote);
     }
-    line.append(text); main.append(line);
     row.setAttribute('aria-label', outgoing ? `我方消息，${self.name}` : `AI 回复，${person.name}`);
     const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
     time.title = '设备记录时间，不代表剧情时间'; time.dateTime = message.createdAt; main.append(time);
