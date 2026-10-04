@@ -1,5 +1,13 @@
 import { conversationId } from './messages.js';
 
+const menuIcons = {
+  '复制': 'M8 8h12v13H8z M16 8V3H3v13h5',
+  '编辑': 'm14 5 5 5 M4 20l5-1L21 7l-5-5L4 14z',
+  '引用': 'M9 6H3v7h6V6Zm12 0h-6v7h6V6ZM9 13c0 4-2 6-5 6m17-6c0 4-2 6-5 6',
+  '删除': 'M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7',
+  '多选': 'M9 6h12M9 12h12M9 18h12M2 6l1 1 3-3M2 12l1 1 3-3M2 18l1 1 3-3',
+};
+
 // Menus are built from text nodes and stable message IDs. Nothing from a message
 // is evaluated as markup, and no selection is shared across conversations.
 export function createMessageActions({ wrap, scroll, person, messenger, el, button, repaint }) {
@@ -11,8 +19,10 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
   function closeMenu() { if (panelKind === 'menu' || panelKind === 'delete') { layer.hidden = true; layer.replaceChildren(); panelKind = ''; } }
   function stopPress() { clearTimeout(timer); pointer = undefined; }
   function panel(title, kind) {
-    panelKind = kind; layer.replaceChildren(); layer.hidden = false;
-    const box = el('section', 'message-action-card'); box.dataset.kind = kind; box.tabIndex = -1; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', title); box.append(el('h2', '', title)); layer.append(box);
+    panelKind = kind; layer.dataset.kind = kind; layer.replaceChildren(); layer.hidden = false;
+    const box = el('section', 'message-action-card'); box.dataset.kind = kind; box.tabIndex = -1; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', title);
+    if (kind !== 'menu') box.append(el('h2', '', title));
+    layer.append(box);
     queueMicrotask(() => { if (box.isConnected) (box.querySelector('textarea, button:not(:disabled)') || box).focus({preventScroll:true}); }); return box;
   }
   function attempt(work, status) { try { work(); } catch (e) { status.textContent = e.message; } }
@@ -26,14 +36,37 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     if (!currentMessage(id) || messenger.status().change || messenger.draft(person.id).editing) return;
     const box = panel('消息操作', 'menu'), status = el('p', 'profile-status');
     const row = [...scroll.querySelectorAll('[data-message-id]')].find(node => node.dataset.messageId === id);
-    if (row) { const bounds = row.getBoundingClientRect(), container = wrap.getBoundingClientRect(); const below = bounds.bottom-container.top+6; box.style.top = `${Math.max(8, Math.min(container.height-190, below+190>container.height ? bounds.top-container.top-190 : below))}px`; }
-    box.append(button('复制', async () => {
-      try { const value = currentMessage(id)?.text; if (value === undefined) throw Error(); await win.navigator.clipboard.writeText(value); if (life.signal.aborted || panelKind !== 'menu') return; status.textContent = '已复制'; }
-      catch { if (!life.signal.aborted) status.textContent = '此宿主暂不允许复制，可打开编辑框选择文字'; }
-    }), button('编辑', () => attempt(() => { closeMenu(); messenger.beginEdit(person.id, id); }, status)),
-    button('引用', () => attempt(() => { closeMenu(); messenger.quote(person.id, id); wrap.querySelector('.text-composer textarea')?.focus(); }, status)),
-    button('删除', () => confirmDelete([id]), 'profile-action danger'),
-    button('多选', () => { closeMenu(); suppressUntil = 0; selecting = true; selected = new Set([id]); repaint(); }), button('关闭菜单', closeMenu), status);
+    const anchor = row?.querySelector('.sp-message-bubble-cv2');
+    if (!anchor) { closeMenu(); return; }
+    function placeMenu() {
+      if (!box.isConnected || layer.firstElementChild !== box) return;
+      const bounds = anchor.getBoundingClientRect(), container = wrap.getBoundingClientRect();
+      // Work in CSS pixels even when the host scales the phone shell.
+      const sx = container.width / wrap.offsetWidth || 1, sy = container.height / wrap.offsetHeight || 1;
+      const width = box.offsetWidth, height = box.offsetHeight, gap = 9;
+      const top = (bounds.top - container.top) / sy, bottom = (bounds.bottom - container.top) / sy;
+      const center = (bounds.left + bounds.width / 2 - container.left) / sx;
+      const above = top >= height + gap + 8;
+      const left = Math.max(8, Math.min(wrap.clientWidth - width - 8, center - width / 2));
+      box.style.left = `${left}px`;
+      box.style.top = `${Math.max(8, Math.min(wrap.clientHeight - height - 8, above ? top - height - gap : bottom + gap))}px`;
+      box.dataset.side = above ? 'above' : 'below';
+      box.style.setProperty('--menu-tip', `${Math.max(16, Math.min(width - 16, center - left))}px`);
+    }
+    function action(label, handler) {
+      const item = button(label, handler, 'message-menu-action');
+      const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+      icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true'); path.setAttribute('d', menuIcons[label]); icon.append(path);
+      item.replaceChildren(icon, el('span', '', label)); return item;
+    }
+    box.append(action('复制', async () => {
+      try { const value = currentMessage(id)?.text; if (value === undefined) throw Error(); await win.navigator.clipboard.writeText(value); if (life.signal.aborted || layer.firstElementChild !== box) return; closeMenu(); }
+      catch { if (!life.signal.aborted && layer.firstElementChild === box) { status.textContent = '无法复制，可在编辑框中选择文字'; placeMenu(); } }
+    }), action('编辑', () => attempt(() => { closeMenu(); messenger.beginEdit(person.id, id); }, status)),
+    action('引用', () => attempt(() => { closeMenu(); messenger.quote(person.id, id); wrap.querySelector('.text-composer textarea')?.focus(); }, status)),
+    action('删除', () => confirmDelete([id])),
+    action('多选', () => { closeMenu(); suppressUntil = 0; selecting = true; selected = new Set([id]); repaint(); }), status);
+    placeMenu();
   }
   function decorate(row, message) {
     if (!selecting) return;
@@ -42,6 +75,8 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     check.disabled = !!messenger.status().change; check.dataset.selectMessage = message.messageId; row.prepend(check);
   }
   function paint() {
+    // A rerender can move or remove the anchor. Never leave a detached menu behind.
+    if (panelKind === 'menu') closeMenu();
     const change = messenger.status().change, own = change?.value.personId === person.id, editing = messenger.draft(person.id).editing;
     if (previousChange && !change) { selected.clear(); selecting = false; panelKind = ''; layer.hidden = true; layer.replaceChildren(); }
     previousChange = own;
@@ -69,6 +104,11 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
   }, { signal: life.signal });
   scroll.addEventListener('pointermove', event => { if (pointer && (event.pointerId !== pointer.id || Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>10)) stopPress(); }, { signal: life.signal });
   for (const name of ['pointerup','pointercancel','scroll']) scroll.addEventListener(name, stopPress, { signal: life.signal });
+  const dismissPopup = () => { if (panelKind === 'menu') closeMenu(); };
+  scroll.addEventListener('scroll', dismissPopup, { signal: life.signal });
+  win.addEventListener('resize', dismissPopup, { signal: life.signal });
+  win.visualViewport?.addEventListener('resize', dismissPopup, { signal: life.signal });
+  win.visualViewport?.addEventListener('scroll', dismissPopup, { signal: life.signal });
   scroll.addEventListener('contextmenu', event => { const row = event.target.closest('[data-message-id]'); if (!row || row.classList.contains('pending-message')) return; event.preventDefault(); stopPress(); if (!selecting) openMenu(row.dataset.messageId); }, { signal: life.signal });
   scroll.addEventListener('click', event => {
     if (Date.now() < suppressUntil) { event.preventDefault(); event.stopPropagation(); return; }
