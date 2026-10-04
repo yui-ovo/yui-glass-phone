@@ -925,6 +925,10 @@ h1, h2, p { margin: 0; }
 .profile-label textarea { resize: vertical; min-height: 75px; }
 .profile-label input:focus, .profile-label textarea:focus, .profile-label select:focus { border-color: #c6bdd877; }
 .profile-label select option { background: #303038; color: #ece9f0; }
+.directory-scroll > select, .profile-trace > select { box-sizing: border-box; width: 100%; min-height: 38px; padding: 8px; border: 1px solid #ffffff18; border-radius: 11px; background: #303038; color: #ece9f0; font-size: 16px; }
+.directory-scroll > select option, .profile-trace > select option { background: #303038; color: #ece9f0; }
+.send-button.is-generating svg { opacity: .6; }
+.sp-message-cv2:not(.self) .message-saved-time { align-self: flex-start; }
 .profile-label input[type=file] { font-size: 11px; }
 .profile-action { display: block; width: 100%; min-height: 40px; margin: 9px 0; padding: 10px 12px; text-align: center; font-size: 12px; border-radius: 12px; border: 1px solid #ffffff18; background: #ffffff07; color: #d9d5df; }
 .profile-action.primary { background: #c9c2d522; border-color: #d5cbe044; }

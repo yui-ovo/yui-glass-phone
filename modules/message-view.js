@@ -4,18 +4,26 @@ import { forPerson, MAX_TEXT } from './messages.js';
 // Every name and message is a text node, never executable regex output/HTML.
 export function mountConversation({ wrap, scroll, person, self, messenger, el, button, avatar, icon }) {
   scroll.classList.add('chat-scroll', 'real-messages');
-  const hint = el('p', 'message-local-note', '消息保存在本机，AI 回复尚未接入');
+  const hint = el('p', 'message-local-note', '有字发送 · 空白时点飞机让对方回复');
   const feedback = el('p', 'message-feedback'); feedback.setAttribute('role', 'status');
   const composer = el('div', 'composer text-composer'), input = el('textarea'); input.rows = 1;
   input.placeholder = '⟡小如思念送達中······ ♡⟡'; input.setAttribute('aria-label', '消息输入框');
-  input.title = `每条最多 ${MAX_TEXT} 个字符；Enter 换行，点击箭头发送。消息保存在本机，AI 回复尚未接入`;
+  input.title = `每条最多 ${MAX_TEXT} 个字符；Enter 换行，点击飞机发送。消息保存在本机`;
   const count = el('span', 'message-count');
   let composing = false, active = true;
   const extra = button('', () => { feedback.textContent = '目前支持文字消息，附件还未接入'; }, 'composer-button');
   extra.setAttribute('aria-label', '添加附件');
   extra.append(el('span', 'sp-fake-input-left-cv2'));
-  const send = button('', () => { if (composing) return; try { messenger.submit(person.id); } catch (e) { feedback.textContent = e.message; } }, 'composer-button send-button');
-  send.setAttribute('aria-label', '发送'); send.append(el('span', 'sp-fake-input-right-cv2'));
+  const send = button('', () => {
+    if (composing) return;
+    try {
+      if (messenger.status().generating === person.id) messenger.cancelReply(person.id);
+      else if (messenger.draft(person.id).text.trim()) messenger.submit(person.id);
+      else if (Date.now() < messenger.draft(person.id).replyAfter) feedback.textContent = '消息已发送，稍后再点飞机让对方回复';
+      else void messenger.requestReply(person.id);
+    } catch (e) { feedback.textContent = e.message; }
+  }, 'composer-button send-button');
+  send.innerHTML = icon('send');
   function resizeInput() {
     if (!active || !input.isConnected) return;
     const top = input.scrollTop;
@@ -26,7 +34,13 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   function controls() {
     const state = messenger.draft(person.id), size = [...state.text].length;
     const status = messenger.status();
-    send.disabled = composing || !state.text.trim() || size > MAX_TEXT || !!state.operation || !messenger.history() || status.reading;
+    const generating = status.generating === person.id;
+    send.disabled = !generating && (composing || size > MAX_TEXT || !!state.operation || !messenger.history() || status.reading || !!status.generating);
+    const label = generating ? '停止回复' : state.text.trim() ? '发送' : '让对方回复';
+    send.innerHTML = icon(generating ? 'stop' : 'send');
+    send.setAttribute('aria-label', label); send.title = label; send.classList.toggle('is-generating', generating);
+    if (generating) feedback.textContent = '正在请求回复…';
+    else if (state.aiError) feedback.textContent = state.aiError;
     count.textContent = `${size} / ${MAX_TEXT}`;
     count.hidden = size < MAX_TEXT * .9 || size > MAX_TEXT;
     if (size > MAX_TEXT) feedback.textContent = `每条消息最多 ${MAX_TEXT} 个字符，请缩短后发送`;
@@ -39,14 +53,15 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   composer.append(extra, input, send); wrap.append(hint, count, feedback, composer);
   const observer = new ResizeObserver(resizeInput); observer.observe(wrap);
   function bubble(message, pending) {
-    const row = el('div', 'sp-message-cv2 self'), main = el('div', 'sp-message-main-cv2 self');
+    const outgoing = message.sender.kind === 'self', suffix = outgoing ? ' self' : '';
+    const row = el('div', 'sp-message-cv2' + suffix), main = el('div', 'sp-message-main-cv2' + suffix);
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
-    const line = el('div', 'sp-message-row-cv2 self'), text = el('div', 'sp-message-bubble-cv2 self', message.text);
+    const line = el('div', 'sp-message-row-cv2' + suffix), text = el('div', 'sp-message-bubble-cv2' + suffix, message.text);
     line.append(text); main.append(line);
-    row.setAttribute('aria-label', `我方消息，${self.name}`);
+    row.setAttribute('aria-label', outgoing ? `我方消息，${self.name}` : `AI 回复，${person.name}`);
     const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
     time.title = '设备记录时间，不代表剧情时间'; time.dateTime = message.createdAt; main.append(time);
-    row.append(main, avatar(self)); return row;
+    if (outgoing) row.append(main, avatar(self)); else row.append(avatar(person), main); return row;
   }
   function paint() {
     if (!active) return;
@@ -69,9 +84,9 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     }
     // Version counter in the controller decides whether submitted input may be cleared.
     if (input.value !== state.text) input.value = state.text;
-    controls(); scroll.scrollTop = scroll.scrollHeight;
+    feedback.textContent = ''; controls(); scroll.scrollTop = scroll.scrollHeight;
     queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = scroll.scrollHeight; });
   }
   const unsubscribe = messenger.subscribe(paint); paint();
-  return () => { active = false; observer.disconnect(); unsubscribe(); };
+  return () => { active = false; observer.disconnect(); unsubscribe(); messenger.cancelReply(person.id); };
 }

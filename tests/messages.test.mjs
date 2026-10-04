@@ -4,6 +4,7 @@ import { newBook, newPerson, clone } from '../modules/contacts.js';
 import { createMessage, newHistory, appendMessage, validateHistory, forPerson, MAX_TEXT } from '../modules/messages.js';
 import { createMessageStore, messageKey } from '../modules/message-host.js';
 import { createMessenger } from '../modules/messenger.js';
+import { saveConfig, defaultConfig } from '../modules/ai.js';
 const tick = () => new Promise(r=>setTimeout(r,10));
 function fixture(tt=false) {
   const book=newBook(),friend=newPerson();friend.name='好友';friend.relation={known:true,friend:true,accountKnown:true};book.people.push(friend);
@@ -63,4 +64,38 @@ test('controller keeps later input, blocks duplicate click, retains retry ID and
   f.state.delay=null;f.state.fail=true;m.submit(f.friend.id);await tick();const id=m.draft(f.friend.id).operation.message.messageId;assert.equal(m.draft(f.friend.id).text,'new input');
   f.state.fail=false;await m.retry(f.friend.id);assert.equal(m.history().messages.at(-1).messageId,id);assert.equal(m.draft(f.friend.id).text,'');
   m.input(f.friend.id,'unsent');const stop=m.subscribe(()=>{});stop();assert(m.dirty());m.reset();assert(!m.dirty());
+});
+function aiFixture(tt = false) {
+  const f = fixture(tt); let calls = 0, release;
+  const persona = {name1:'当前人设',powerUserSettings:{persona_description:'用户设定'}};
+  f.win.SillyTavern = {getContext:()=>persona};
+  saveConfig(f.win,{...defaultConfig(),baseUrl:'https://fixture.test/v1',model:'test',apiKey:'fixture-only'});
+  f.win.fetch = async (_url, options) => {
+    calls++; f.lastRequest=JSON.parse(options.body);
+    if(f.wait) await new Promise((resolve,reject)=>{release=resolve; options.signal.addEventListener('abort',()=>reject(Error('abort')),{once:true});});
+    return Response.json({choices:[{message:{content:'AI 文字回复'},finish_reason:'stop'}]});
+  };
+  return Object.assign(f,{calls:()=>calls,release:()=>release?.(),persona});
+}
+for (const tt of [false,true]) test(`${tt?'TT':'ST'} AI reply persistent, same-ID save retry, no regeneration or draft loss`, async()=>{
+  const f=aiFixture(tt),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);
+  if(tt)f.state.loseConfirmation=true;else f.state.fail=true;
+  await m.requestReply(f.friend.id);const pending=m.draft(f.friend.id).operation;assert(pending);assert.equal(f.calls(),1);assert.equal(pending.message.source,'ai-reply');
+  await m.requestReply(f.friend.id);assert.equal(f.calls(),1);
+  m.input(f.friend.id,'随后输入的内容');f.state.fail=false;f.state.loseConfirmation=false;
+  await m.retry(f.friend.id);assert.equal(f.calls(),1);assert.equal(m.history().messages[0].messageId,pending.message.messageId);assert.equal(m.draft(f.friend.id).text,'随后输入的内容');
+  if(tt)assert.equal(f.state.writes,2); // one config write and one native reply write
+  await m.bind(f.session,f.signal);assert.equal(m.history().messages[0].text,'AI 文字回复');
+});
+test('AI double click, cancel, persona changes and archive switches discard late results',async()=>{
+  const f=aiFixture(),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);f.wait=true;
+  let pending=m.requestReply(f.friend.id);await tick();await m.requestReply(f.friend.id);assert.equal(f.calls(),1);assert(m.dirty());m.cancelReply();f.release();await pending;assert.equal(m.history().messages.length,0);
+  pending=m.requestReply(f.friend.id);await tick();f.persona.name1='另一个人设';f.release();await pending;assert.equal(m.history().messages.length,0);assert.match(m.draft(f.friend.id).aiError,/已变化/);
+  pending=m.requestReply(f.friend.id);await tick();m.reset();f.release();await pending;assert.equal(m.history(),undefined);assert(!m.dirty());
+});
+test('AI captured native write finishes in old store and empty-button cooldown prevents accidental request',async()=>{
+  const f=aiFixture(true),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);
+  m.input(f.friend.id,'发送');m.submit(f.friend.id);await tick();await m.requestReply(f.friend.id);assert.equal(f.calls(),0);
+  m.draft(f.friend.id).replyAfter=0;let release;f.state.delay=new Promise(r=>release=r);const pending=m.requestReply(f.friend.id);await tick();m.reset();f.state.active=false;release();await pending;
+  const histories=[...f.state.data.values()].filter(v=>v?.messages);assert.equal(histories[0].messages[1].source,'ai-reply');assert.equal(m.history(),undefined);
 });

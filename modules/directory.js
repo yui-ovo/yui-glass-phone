@@ -4,6 +4,8 @@ import { createProfileHost } from './host.js';
 import { createMessenger } from './messenger.js';
 import { latestMessage, forPerson } from './messages.js';
 import { mountConversation } from './message-view.js';
+import { apiSettings, materialEditor, personaPreview } from './ai-editor.js';
+import { currentPersona } from './ai.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
 export function createDirectory({ window: win, document: doc, navigate, icon, notify }) {
@@ -82,7 +84,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }
     const preview = button('', () => upload.click(), 'profile-avatar-button'); preview.setAttribute('aria-label', '更换头像'); scroll.append(preview);
     function renderAvatar() { preview.replaceChildren(avatar({ ...draft, name: draft.name || '我' })); }
-    field(self ? '我的名字' : '人物名字', draft.name, 'name');
+    const nameField = field(self ? '我的名字' : '人物名字', draft.name, 'name');
     if (!self) {
       field('手机备注', draft.remark, 'remark');
       const persona = field('线上人设（如有）', draft.description, 'description', 1000, true);
@@ -100,12 +102,9 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const setRelation = () => { const friend = preset.value === 'friend', isKnown = preset.value !== 'stranger'; draft.relation = { friend, known: isKnown, accountKnown: friend || (isKnown && known.checked) }; knownLabel.hidden = preset.value !== 'known'; status.textContent = '资料已修改，尚未保存'; };
       knownLabel.hidden = preset.value !== 'known'; preset.onchange = setRelation; known.onchange = setRelation;
       scroll.append(el('p', 'profile-help', '登记人物后，只有“已是好友”的人会出现在联系人中。'));
-      if (draft.roleplayMaterials?.length) {
-        const materials = el('details', 'profile-trace'); materials.append(el('summary', '', `已关联世界书资料 · ${draft.roleplayMaterials.length} 条`));
-        for (const item of draft.roleplayMaterials) materials.append(el('h3', 'profile-meta', `${item.world} · ${item.title || item.uid}`), el('p', 'profile-material', item.content));
-        materials.append(el('p', 'profile-help', '保存人物会完整保留这些资料。选择和编辑关联将在后续接入。')); scroll.append(materials);
-      }
     }
+    scroll.append(personaPreview(win, el));
+    const materials = !self ? materialEditor({ win, scroll, draft, el, button, current, status }) : undefined;
     const uploadLabel = el('label', 'profile-label', '上传头像'), upload = el('input'); upload.type = 'file'; upload.accept = 'image/png,image/jpeg,image/webp'; upload.setAttribute('aria-label', '上传头像'); uploadLabel.append(upload); scroll.append(uploadLabel);
     const urlLabel = el('label', 'profile-label', '头像图片 URL'), url = el('input'); url.type = 'url'; url.maxLength = 2048; url.setAttribute('aria-label', '头像图片 URL'); urlLabel.append(url); scroll.append(urlLabel);
     let baselineUrl = '';
@@ -118,11 +117,26 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       finally { if (current() && ticket === imageTicket) setBusy(false); }
     }
     upload.onchange = () => { const file = upload.files?.[0]; upload.value = ''; if (file) void imageWork(async () => ({ kind: 'upload', value: await readAvatar(file, doc) })); };
+    if (self) scroll.append(button('带入当前酒馆人设的名字和头像', () => {
+      let persona; try { persona = currentPersona(win); } catch (e) { status.textContent = e.message; return; }
+      draft.name = persona.name; nameField.value = draft.name;
+      void imageWork(async imageSignal => {
+        const { user_avatar } = await import('/scripts/personas.js');
+        if (!current() || imageSignal.aborted) throw Error('操作已取消');
+        if (!user_avatar) throw Error('名字已带入，宿主未提供头像；可手动上传');
+        const ctx = win.SillyTavern.getContext(), address = new URL(ctx.getThumbnailUrl('persona', user_avatar), win.location.href);
+        if (address.origin !== win.location.origin) throw Error('名字已带入，头像地址无法确认；可手动上传');
+        const response = await win.fetch(address.href, { signal: imageSignal, credentials: 'same-origin' });
+        if (!response.ok) throw Error('名字已带入，头像读取失败；可手动上传');
+        return { kind: 'upload', value: await readAvatar(await response.blob(), doc) };
+      });
+    }));
     scroll.append(button('加载此头像 URL', () => { void imageWork(async s => ({ kind: 'url', value: await loadAvatarUrl(url.value, doc, s) })); }),
       button('恢复默认头像', () => { imageTicket++; pendingImage?.abort(); setBusy(false); draft.avatar = { kind: 'default', value: '' }; renderAvatar(); status.textContent = '默认头像已预览，保存后保留'; }),
       el('p', 'profile-help', '上传图片在本机处理。外链仅在你点击加载后访问。'));
     const save = button(self ? '保存我的名片' : '保存人物', async () => {
       if (busy || saving || !current()) return;
+      if (materials?.busy()) { status.textContent = '请等待世界书资料读取完成'; return; }
       const book = clone(captured.book), value = clone(draft); value.name = value.name.trim();
       if (!self) {
         value.remark = value.remark.trim(); value.description = value.description.trim();
@@ -140,8 +154,8 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const actions = el('div', 'profile-actions'); actions.append(save, cancel); scroll.append(status, actions);
     if (!self && persisted) scroll.append(button('删除人物', () => go('delete-person'), 'profile-action danger'));
     renderAvatar();
-    editor = { saving: () => saving, dirty: () => !persisted || saving || busy || !sameJson(draft, baseline) || url.value !== baselineUrl,
-      dispose() { active = false; imageTicket++; pendingImage?.abort(); }, draft };
+    editor = { saving: () => saving, dirty: () => !persisted || saving || busy || materials?.busy() || !sameJson(draft, baseline) || url.value !== baselineUrl,
+      dispose() { active = false; imageTicket++; pendingImage?.abort(); materials?.dispose(); }, draft };
     return wrap;
   }
   function removalPage(restore = false) {
@@ -193,6 +207,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   }
   function render(target) {
     route = target; clearEditor(); clearMessageView?.(); clearMessageView = undefined;
+    if (target === 'ai-settings') { const view = apiSettings({ win, base, el, button }); editor = view.editor; return view.wrap; }
     if (target === 'moments') { const { wrap, scroll } = base('朋友圈'); empty(scroll, '朋友圈功能尚未接入'); return wrap; }
     if (!session) {
       const { wrap, scroll } = base(({ messages: '消息', contacts: '联系人', me: '我', people: '人物管理' })[target] || '人物资料');
@@ -291,7 +306,8 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
+  return { render, handles: target => ['ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
+    suspend() { messenger.cancelReply(); editor?.suspend?.(); },
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
     dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },

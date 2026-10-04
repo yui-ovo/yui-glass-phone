@@ -31,3 +31,14 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 新增 messages.js/message-host.js/messenger.js/message-view.js，业务模型与联系人分开。复用本项目已经核实的 ST 账号读取和 TT chat store API，不增加宿主消息/模型端点。Web Locks 使用浏览器公开 API；缺失时停止写入消息。原生 store 无 compare-and-swap，不宣称跨进程原子事务。
 
 按用户本轮要求再次核对其 regex-2026-10-03T16_57_48.251Z.json，真实文字气泡继续使用原 cv2 布局和 CSS，替换的是文本数据来源。没有复制旧 yui-pocket 的聊天 UI。
+
+## 0.6.0 独立 AI 接口依据
+
+仅检查官方宿主源码和公开接口，没有引入其他小手机实现。
+
+- [ST context](https://github.com/SillyTavern/SillyTavern/blob/release/public/scripts/st-context.js)：name1、powerUserSettings、characters、getWorldInfoNames、loadWorldInfo。
+- [ST personas](https://github.com/SillyTavern/SillyTavern/blob/release/public/scripts/personas.js)：当前 persona_description 与 user_avatar；头像仅在用户点击带入时通过宿主 personas 模块读取。
+- [TT context](https://github.com/Darkatse/TauriTavern/blob/main/src/scripts/st-context.js)：核实同名当前人设/世界书接口。
+- [TT 前端契约](https://github.com/Darkatse/TauriTavern/blob/main/docs/FrontendHostContract.md)：同源请求路由适配不等于第三方网络代理。本版独立 API 直接 fetch 外部地址，不套用 ST 服务端生成端点。
+
+本轮读取的是当前官方源码；真实 TT 2.3.0 仍需用户配置接口后实测。

@@ -127,7 +127,7 @@ try {
     assert.equal(await page.locator('.directory-scroll').getByText('尚不认识', { exact: true }).count(), 1);
     await b(page, '返回手机桌面').click(); await open(page); await b(page, '联系人').click();
     assert.equal(await page.locator('.contact-row').count(), 1);
-    await openChat(page,'阿棠'); assert.equal(await page.locator('.directory-empty').textContent(), '暂无消息'); assert(await b(page, '发送').isDisabled());
+    await openChat(page,'阿棠'); assert.equal(await page.locator('.directory-empty').textContent(), '暂无消息'); assert(await b(page, '让对方回复').isEnabled());
     await b(page, '聊天资料').click(); assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '<img src=x onerror=alert(1)>');
     assert.equal(await page.locator('.directory-view img[src="x"]').count(), 0);
     await page.getByLabel('手机备注', { exact: true }).fill('老板'); await save(page);

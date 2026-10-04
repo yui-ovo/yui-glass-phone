@@ -3,9 +3,9 @@ import { installUpdateRefresh } from "./update-refresh.js";
 import { createDirectory } from './modules/directory.js';
 import { ttReady, ttHost, ttFrame } from './modules/host.js';
 import { installLauncher } from './modules/launcher.js';
-const VERSION = "0.5.6";
+const VERSION = "0.6.0";
 const HOST_ID = 'yui-glass-phone';
-const stylesheet = new URL('./style.css?v=0.5.6', import.meta.url).href;
+const stylesheet = new URL('./style.css?v=0.6.0', import.meta.url).href;
 const icons = {
   contacts: '<rect x="5" y="3" width="15" height="18" rx="3"/><path d="M3 7h4M3 12h4M3 17h4"/><circle cx="12.5" cy="9" r="2.3"/><path d="M9 17v-1a3.5 3.5 0 0 1 7 0v1"/>',
   moments: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="m12 3.5 4 6M20 8l-3 7M17 19l-7-1M6 18l-1-7M5 7l7-3"/>',
@@ -22,7 +22,8 @@ const icons = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
   more: '<circle cx="5" cy="12" r=".7"/><circle cx="12" cy="12" r=".7"/><circle cx="19" cy="12" r=".7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  send: '<path d="m8 5 7 7-7 7"/>',
+  send: '<path d="m3 10 18-7-7 18-3-8-8-3Z"/><path d="m11 13 10-10"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="2"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M10 19h4"/>',
   arrow: '<path d="m9 6 6 6-6 6"/>',
   moon: '<path d="M20 14a8 8 0 0 1-10-10A8.5 8.5 0 1 0 20 14Z"/>',
@@ -155,7 +156,7 @@ function mount() {
     return `${toolbar('动态','')}<div class="placeholder-page"><div class="placeholder-icon">${icon('thread')}</div><h2>留一处空白</h2><p>想说的话，遇见的小事。<br>以后，慢慢放在这里。</p><span class="quiet-pill">待续</span></div>`;
   }
   function settings() {
-    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃</span></div><span class="little-star">✦</span></section><h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">壁纸选择仅在本次打开期间保留。</p><button type="button" class="profile-action" data-demo="toggle">${demo ? '退出样式演示' : '独立样式演示'}</button><p class="settings-note">样式演示与剧情人物资料分开，不保存示例记录。</p><div class="version">灰玻璃小手机 <span>0.5.6</span></div></div>`;
+    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃</span></div><span class="little-star">✦</span></section>${demo ? '' : '<button type="button" class="profile-action" data-go="ai-settings">独立 API 设置</button>'}<h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">壁纸选择仅在本次打开期间保留。</p><button type="button" class="profile-action" data-demo="toggle">${demo ? '退出样式演示' : '独立样式演示'}</button><p class="settings-note">样式演示与剧情人物资料分开，不保存示例记录。</p><div class="version">灰玻璃小手机 <span>0.6.0</span></div></div>`;
   }
   function details() {
     return `${toolbar('聊天资料','','chat')}<div class="detail-page">${avatar(activeChat)}<h2>${people[activeChat].name}</h2><p>${activeChat === 'group' ? '把大家的小日常，收在一起。' : '有些小事，只想和你分享。'}</p><span class="quiet-pill">示例${activeChat === 'group' ? '群聊 · 3 人' : '联系人'}</span><div class="detail-note">头像、备注与聊天背景<br>后续在这里设置</div></div>`;
@@ -220,6 +221,7 @@ function mount() {
     }
   }
   function close() {
+    directory?.suspend();
     overlay.hidden = true;
     launcher.hidden = false;
     clearInterval(clockInterval);

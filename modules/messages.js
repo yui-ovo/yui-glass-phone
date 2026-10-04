@@ -14,14 +14,24 @@ export function createMessage(archiveId, personId, text, sequence) {
     sender: { kind: 'self', id: selfId(archiveId) }, recipient: { kind: 'person', id: personId },
     text, createdAt: new Date().toISOString(), sequence, source: 'phone-manual' };
 }
+export function createReply(archiveId, personId, text, sequence) {
+  const message = createMessage(archiveId, personId, text, sequence);
+  return { ...message, sender: message.recipient, recipient: message.sender, source: 'ai-reply' };
+}
+export const messagePersonId = m => m.source === 'ai-reply' ? m.sender?.id : m.recipient?.id;
+function validParties(m, archiveId) {
+  const incoming = m.source === 'ai-reply', self = incoming ? m.recipient : m.sender, person = incoming ? m.sender : m.recipient;
+  return ['phone-manual', 'ai-reply'].includes(m.source) && record(self) && self.kind === 'self' && self.id === selfId(archiveId)
+    && record(person) && person.kind === 'person' && typeof person.id === 'string' && !!person.id && person.id.length <= 128
+    && m.conversationId === conversationId(person.id);
+}
 export function validateHistory(value, archiveId) {
   if (!record(value) || value.version !== 1 || value.archiveId !== archiveId || !Number.isSafeInteger(value.revision) || value.revision < 0 || !Array.isArray(value.messages) || value.messages.length > MAX_MESSAGES) throw Error('消息格式或容量不支持，已停止写入');
   const ids = new Set(); let previous = 0, size = 0;
   for (const m of value.messages) {
     if (!record(m) || m.version !== 1 || typeof m.messageId !== 'string' || !m.messageId || m.messageId.length > 128 || ids.has(m.messageId)
-      || m.archiveId !== archiveId || !record(m.recipient) || m.recipient.kind !== 'person' || typeof m.recipient.id !== 'string' || !m.recipient.id || m.recipient.id.length > 128
-      || m.conversationId !== conversationId(m.recipient.id) || !record(m.sender) || m.sender.kind !== 'self' || m.sender.id !== selfId(archiveId)
-      || m.source !== 'phone-manual' || typeof m.createdAt !== 'string' || !Number.isFinite(Date.parse(m.createdAt))
+      || m.archiveId !== archiveId || !validParties(m, archiveId)
+      || typeof m.createdAt !== 'string' || !Number.isFinite(Date.parse(m.createdAt))
       || !Number.isSafeInteger(m.sequence) || m.sequence <= previous) throw Error('消息记录无法可靠识别，已停止写入');
     validateText(m.text); ids.add(m.messageId); previous = m.sequence; size += m.text.length;
   }

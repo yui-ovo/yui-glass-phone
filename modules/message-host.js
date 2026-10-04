@@ -1,6 +1,6 @@
 import { ttStore, ttHost } from './host.js';
 import { clone, sameJson } from './contacts.js';
-import { newHistory, validateHistory, appendMessage } from './messages.js';
+import { newHistory, validateHistory, appendMessage, messagePersonId } from './messages.js';
 export const messageKey = (account, archiveId) => `yui-glass-phone.messages.v1:${encodeURIComponent(account)}:${encodeURIComponent(archiveId)}`;
 export function createMessageStore(win, profiles, session, signal) {
   const archiveId = session.book.id, key = messageKey(session.account, archiveId);
@@ -27,7 +27,7 @@ export function createMessageStore(win, profiles, session, signal) {
         if (!sameJson(existing, message)) throw Error('相同消息 ID 的内容不一致，未写入');
         return previous; // A previous native write succeeded even if confirmation failed.
       }
-      if (!fresh.book.people.some(p => p.id === message.recipient.id && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
+      if (!fresh.book.people.some(p => p.id === messagePersonId(message) && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
       const next = appendMessage(previous, message, expectedRevision);
       guard();
       // Recheck immediately before dispatch. Web Locks serialize cooperating windows.

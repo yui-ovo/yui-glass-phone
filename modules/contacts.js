@@ -56,6 +56,7 @@ export function validateBook(book) {
     if (!record(rel) || ![rel.known, rel.accountKnown, rel.friend].every(x => typeof x === 'boolean') || (rel.friend && (!rel.known || !rel.accountKnown)) || (!rel.known && rel.accountKnown)) throw Error('人物关系不一致');
     validateAvatar(person.avatar);
     if (person.roleplayMaterials !== undefined) validateMaterials(person.roleplayMaterials);
+    if (person.aiExcludedMaterials !== undefined && (!Array.isArray(person.aiExcludedMaterials) || person.aiExcludedMaterials.length > 20 || !person.aiExcludedMaterials.every(key => typeof key === 'string' && (person.roleplayMaterials || []).some(item => JSON.stringify([item.world, item.uid]) === key)))) throw Error('世界书排除条目格式无效，已停止保存');
   }
   return book;
 }

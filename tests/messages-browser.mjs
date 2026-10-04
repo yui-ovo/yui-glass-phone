@@ -129,7 +129,7 @@ try {
         for (const draft of ['键盘草稿🙂\n第二行\n第三行\n第四行\n第五行','字'.repeat(9500),'字'.repeat(10001)]) {
           await textBox(p).fill(draft);
           await p.waitForTimeout(100);
-          const bounds=await p.locator('.page').boundingBox(), input=await textBox(p).boundingBox(), send=await b(p,'发送').boundingBox();
+          const bounds=await p.locator('.page').boundingBox(), input=await textBox(p).boundingBox(), send=await p.locator('.send-button').boundingBox();
           assert(input.y>=bounds.y && input.y+input.height<=bounds.y+bounds.height, 'textarea stays inside phone with reduced native frame');
           assert(send.y+send.height<=bounds.y+bounds.height, 'send stays inside phone');
           assert(send.y+send.height<=frame.safeFrame.top+frame.safeFrame.height-frame.ime.keyboardOffset,'send stays above keyboard');
@@ -167,7 +167,7 @@ try {
     assert.equal(profile.people[0].remark,'甲备注');assert.equal(profile.id,before.id);assert.equal(profile.self.account,before.self.account);
     assert.equal(profile.people.length,2);assert.equal(profile.people[0].id,before.people[0].id);assert.equal(profile.people[0].account,before.people[0].account);
     await p.reload();await open(p);await chat(p,'甲备注');assert.equal(await bubbles(p).count(),2);
-    await textBox(p).fill('字'.repeat(10001));assert(await b(p,'发送').isDisabled());assert((await p.locator('.message-feedback').textContent()).includes('10000'));await textBox(p).fill('  \n ');assert(await b(p,'发送').isDisabled());await textBox(p).fill('');
+    await textBox(p).fill('字'.repeat(10001));assert(await b(p,'发送').isDisabled());assert((await p.locator('.message-feedback').textContent()).includes('10000'));await textBox(p).fill('  \n ');assert(await b(p,'让对方回复').isEnabled());await textBox(p).fill('');
     await sendText(p,'长'.repeat(10000));assert.equal((await bubbles(p).last().textContent()).length,10000);
     await p.evaluate(()=>profileMock.switch('0','chat-B','integrity-A'));await until(()=>b(p,'登记人物').count(),'B');await add(p,'B人物','friend',false);await save(p);await b(p,'取消').click();await backContacts(p);await chat(p,'B人物');assert.equal(await bubbles(p).count(),0);await sendText(p,'B独有');
     await p.evaluate(()=>profileMock.switch('1','chat-A','integrity-A'));await until(()=>b(p,'登记人物').count(),'other card');assert.equal(await p.locator('.contact-row').count(),0);
