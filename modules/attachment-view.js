@@ -38,9 +38,13 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   }
   function transfer() {
     view='transfer'; const {body,status}=frame('转账');
-    body.append(el('p','profile-help',`转给 ${person.remark || person.name} · 虚构转账`));
-    const amount=input(body,'转账金额','amount'); amount.inputMode='decimal'; amount.placeholder='0.00';
-    input(body,'转账备注','note');
+    const recipient=el('div','transfer-recipient');recipient.append(el('span','transfer-recipient-mark','↗'),el('span','',`转给 ${person.remark || person.name}`));body.append(recipient);
+    const amountBox=el('div','transfer-amount-entry');body.append(amountBox);
+    const amount=input(amountBox,'转账金额','amount'); amount.inputMode='decimal'; amount.placeholder='0.00';
+    amount.parentElement.firstChild.replaceWith(el('span','transfer-amount-label','转账金额'));
+    const currency=el('span','transfer-currency','¥');currency.setAttribute('aria-hidden','true');amount.parentElement.insertBefore(currency,amount);
+    const note=input(body,'转账备注','note');note.placeholder='添加备注（选填）';note.parentElement.classList.add('transfer-note-entry');
+    body.append(el('p','transfer-local-hint','虚构转账 · 不涉及真实支付'));
     const actions=el('div','attachment-dialog-actions');body.append(actions);
     actions.append(button('取消转账',()=>{form.amount='';form.note='';form.edit++;close();}),button('发送转账',()=>{try{messenger.sendTransfer(person.id,form.amount,form.note);close();}catch(e){status.textContent=e.message;}},'profile-action primary'));
   }
