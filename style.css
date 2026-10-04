@@ -1176,3 +1176,18 @@ h1, h2, p { margin: 0; }
 .transfer-local-hint { font-size:9px; color:#938c9f; margin:10px 0 2px; }
 .attachment-dialog-actions { margin-top:8px; }
 .attachment-panel[data-view="receipt"] .transfer-amount { margin:10px 0; font-size:30px; font-weight:300; color:#e0d9ec; }
+.sticker-batch { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; color:#bcb4ca; font-size:10px; }
+.sticker-batch:empty { display:none; }
+.sticker-batch button { min-height:32px; font-size:11px; padding:5px; }
+.sticker-batch .sticker-remove { color:#dcaeb7; }
+.sticker-send.is-selected img { outline:2px solid #c5b5db; outline-offset:-2px; background:#c5b5db20; }
+.sticker-send, .sticker-tab { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:pan-y; }
+.sticker-tabs { touch-action:pan-x; }
+.sticker-role-list { max-height:160px; overflow-y:auto; margin:12px 0; }
+.sticker-role-list .profile-check { padding:7px 0; }
+.attachment-panel [hidden] { display:none!important; }
+.attachment-panel select { color:#e5e1ec; background:#33323d; }
+.receipt-symbol { display:grid; place-items:center; width:42px; height:42px; margin:6px auto 12px; border:1px solid #c5b5db30; border-radius:50%; color:#cfc3df; font-size:22px; }
+.receipt-state { color:#d7cfe1; font-size:12px; }
+.receipt-note { color:#aca3ba; font-size:11px; overflow-wrap:anywhere; }
+.sticker-tab { touch-action:pan-x; }

@@ -1,3 +1,4 @@
+import { FAVORITES, categoryName, validateGroups, migrateGroups, usableBy } from './sticker-groups.js';
 // Owned browser assets, scoped to the current host account. Never touches StickerDB.
 export const STICKER_DB = 'yui-glass-phone.assets.v1';
 const MAX_FILE = 2 * 1024 * 1024, MAX_TOTAL = 20 * 1024 * 1024, MAX_ASSETS = 120;
@@ -41,38 +42,58 @@ function validAsset(item, account) {
 }
 export function createStickerLibrary(win, account) {
   async function database() {
-    if (!win.indexedDB) throw Error('当前环境无法保存表情包素材');
-    return new Promise((resolve, reject) => { const req = win.indexedDB.open(STICKER_DB, 1);
-      req.onupgradeneeded = () => { const store = req.result.createObjectStore('assets', { keyPath: 'key' }); store.createIndex('account', 'account'); };
-      req.onsuccess = () => resolve(req.result); req.onerror = () => reject(Error('表情包库打开失败')); req.onblocked = () => reject(Error('请关闭其他旧手机窗口后重试'));
+    if(!win.indexedDB)throw Error('当前环境无法保存表情包素材');
+    return new Promise((resolve,reject)=>{const req=win.indexedDB.open(STICKER_DB,2);
+      req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('assets')){const s=db.createObjectStore('assets',{keyPath:'key'});s.createIndex('account','account');}if(!db.objectStoreNames.contains('categories'))db.createObjectStore('categories',{keyPath:'account'});};
+      req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(Error('表情包库打开失败'));req.onblocked=()=>reject(Error('请关闭其他旧手机窗口后重试'));
     });
   }
-  async function transaction(mode, run, signal) {
-    checkSignal(signal); const db = await database();
-    try { checkSignal(signal); return await new Promise((resolve, reject) => {
-      const tx = db.transaction('assets', mode); let value, error;
-      const abort = () => { try { tx.abort(); } catch {} }; signal?.addEventListener('abort', abort, { once: true });
-      const clean = () => signal?.removeEventListener('abort', abort);
-      tx.oncomplete = () => { clean(); resolve(value); }; tx.onabort = tx.onerror = () => { clean(); reject(error || Error('素材保存未完成，请检查本机容量并重试')); };
-      try { run(tx.objectStore('assets'), result => { value = result; }, failure => { error = failure; abort(); }); } catch (e) { error = e; abort(); }
-    }); } finally { db.close(); }
+  // Read and mutate one account in the same IndexedDB transaction. Migration is atomic.
+  async function run(change, signal, expectedRevision) {
+    checkSignal(signal);const db=await database();
+    try{checkSignal(signal);return await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['assets','categories'],'readwrite'),store=tx.objectStore('assets'),groups=tx.objectStore('categories');let result,error,assets,doc,loaded=0;
+      const abort=()=>{try{tx.abort();}catch{}};signal?.addEventListener('abort',abort,{once:true});
+      const clean=()=>signal?.removeEventListener('abort',abort);
+      tx.oncomplete=()=>{clean();resolve(result);};tx.onabort=tx.onerror=()=>{clean();reject(error||Error('素材保存未完成，请重新读取后重试'));};
+      function ready(){if(++loaded!==2)return;try{
+        assets=assets.map(a=>validAsset(a,account));
+        const migrated=!doc;if(migrated)doc=migrateGroups(account,assets,()=>crypto.randomUUID());else validateGroups(doc,account,assets);
+        if(expectedRevision!==undefined&&doc.revision!==expectedRevision)throw Error('素材库已被其他窗口修改，请返回重新读取后再操作');
+        if(change){change({assets,doc,store});doc.revision++;}
+        validateGroups(doc,account,assets);if(migrated||change)groups.put(doc);
+        result={revision:doc.revision,categories:doc.categories,permissionReview:!!doc.permissionReview,assets:assets.map(a=>({...a,categoryId:doc.assignments[a.id],category:doc.categories.find(c=>c.id===doc.assignments[a.id]).name}))};
+      }catch(e){error=e;abort();}}
+      const a=store.index('account').getAll(account),g=groups.get(account);a.onsuccess=()=>{assets=a.result;ready();};g.onsuccess=()=>{doc=g.result;ready();};
+    });}finally{db.close();}
   }
-  const list = () => transaction('readonly', (store, done, fail) => { const r = store.index('account').getAll(account); r.onsuccess = () => { try { done(r.result.map(a => validAsset(a, account))); } catch (e) { fail(e); } }; });
+  const snapshot=()=>run();
   return {
-    list,
-    async get(id) { const items = await list(); return items.find(a => a.id === id); },
-    async addBatch(items, signal) {
-      if (!items.length || items.length > 12) throw Error('每批请选择 1–12 张图片');
-      const assets = items.map(item => { const id = crypto.randomUUID(); return validAsset({ ...item, id, key: `${account}:${id}`, account, version: 1, hidden: false }, account); });
-      return transaction('readwrite', (store, done, fail) => { const r = store.index('account').getAll(account); r.onsuccess = () => { try {
-        const old = r.result.map(a => validAsset(a, account));
-        if (old.length + assets.length > MAX_ASSETS || [...old, ...assets].reduce((n, a) => n + a.data.length, 0) > MAX_TOTAL) throw Error('素材库已达 120 张或 20 MB 上限，未删除历史图片');
-        for (const asset of assets) store.add(asset); done(assets);
-      } catch (e) { fail(e); } }; }, signal);
+    snapshot,
+    async list(){return (await snapshot()).assets;},
+    async get(id){return (await snapshot()).assets.find(a=>a.id===id);},
+    async available(archiveId,personId){const s=await snapshot();return s.assets.filter(a=>usableBy(a,s.categories,archiveId,personId)).map(a=>({...a,allowedAI:true}));},
+    async addBatch(items,signal,options={}){
+      if(!items.length||items.length>12)throw Error('每批请选择 1–12 张图片');
+      const additions=items.map(item=>{const id=crypto.randomUUID();return validAsset({...item,id,key:`${account}:${id}`,account,version:1,hidden:false,allowedAI:false},account);});
+      return run(({assets,doc,store})=>{
+        if(assets.length+additions.length>MAX_ASSETS||[...assets,...additions].reduce((n,a)=>n+a.data.length,0)>MAX_TOTAL)throw Error('素材库已达 120 张或 20 MB 上限，未删除历史图片');
+        let selected=options.categoryId&&doc.categories.find(c=>c.id===options.categoryId);
+        if(options.categoryId&&!selected)throw Error('所选分类已不存在');
+        if(options.newName){const name=categoryName(options.newName);if(doc.categories.some(c=>c.name===name))throw Error('分类名称已存在');selected={id:crypto.randomUUID(),name,bindings:[]};doc.categories.push(selected);}
+        for(const a of additions){let c=selected||doc.categories.find(c=>c.name===(a.category||'收藏'));if(!c){c={id:crypto.randomUUID(),name:categoryName(a.category||'收藏'),bindings:[]};doc.categories.push(c);}doc.assignments[a.id]=c.id;a.category=c.name;assets.push(a);store.add(a);}
+      },signal,options.revision);
     },
-    update(id, patch, signal) { return transaction('readwrite', (store, done, fail) => { const r = store.get(`${account}:${id}`); r.onsuccess = () => { try {
-      const item = validAsset(r.result, account), next = validAsset({ ...item, description: patch.description ?? item.description, category: patch.category ?? item.category, allowedAI: patch.allowedAI ?? item.allowedAI, hidden: patch.hidden ?? item.hidden }, account);
-      store.put(next); done(next);
-    } catch (e) { fail(e); } }; }, signal); },
+    async saveCategory(id,name,bindings,revision,signal){
+      return run(({doc})=>{const c=doc.categories.find(c=>c.id===id);if(!c)throw Error('分类已不存在');name=categoryName(name);if(id===FAVORITES&&name!=='收藏')throw Error('收藏不能改名');if(doc.categories.some(x=>x.id!==id&&x.name===name))throw Error('分类名称已存在');c.name=name;c.bindings=bindings;doc.permissionReview=false;},signal,revision);
+    },
+    async removeCategory(id,revision,signal){
+      return run(({assets,doc,store})=>{if(id===FAVORITES)throw Error('收藏不能删除');if(!doc.categories.some(c=>c.id===id))throw Error('分类已不存在');for(const a of assets)if(doc.assignments[a.id]===id){a.hidden=true;a.allowedAI=false;store.put(a);doc.assignments[a.id]=FAVORITES;}doc.categories=doc.categories.filter(c=>c.id!==id);},signal,revision);
+    },
+    async removeBatch(ids,revision,signal){
+      return run(({assets,store})=>{if(!ids.length||new Set(ids).size!==ids.length||ids.some(id=>!assets.some(a=>a.id===id&&!a.hidden)))throw Error('所选图片已变化，请重新选择');for(const a of assets)if(ids.includes(a.id)){a.hidden=true;a.allowedAI=false;store.put(a);}},signal,revision);
+    },
+    // Compatibility for existing asset readers/tests. AI permission lives on categories only.
+    update(id,patch,signal){return run(({assets,doc,store})=>{const index=assets.findIndex(a=>a.id===id);if(index<0)throw Error('图片不存在');const item=assets[index],next=validAsset({...item,description:patch.description??item.description,hidden:patch.hidden??item.hidden,allowedAI:patch.allowedAI??item.allowedAI},account);if(patch.category!==undefined){const name=categoryName(patch.category);let c=doc.categories.find(c=>c.name===name);if(!c){c={id:crypto.randomUUID(),name,bindings:[]};doc.categories.push(c);}doc.assignments[id]=c.id;next.category=name;}assets[index]=next;store.put(next);},signal);},
   };
 }

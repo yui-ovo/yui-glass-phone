@@ -80,7 +80,7 @@ export function createMessenger(win, profiles) {
       if (!person) throw Error('对方不在当前存档好友中');
       const context = replyContext(win, fresh.book, person), initial = await store.read();
       if (!current()) return;
-      const catalog = win.indexedDB ? (await library.list()).filter(a => a.allowedAI && !a.hidden) : [];
+      const catalog = win.indexedDB ? await library.available(captured.book.id, id) : [];
       if (!current()) return;
       const prompt = buildPrompt(context, initial, id, config.historyCount, config.prompt);
       prompt.push({ role: 'system', content: ACTION_PROTOCOL });
@@ -97,7 +97,7 @@ export function createMessenger(win, profiles) {
       if (!sameJson(initial, latestHistory)) throw Error('请求期间手机消息已变化，本次回复未保存，请重新读取后再请求');
       history = latestHistory;
       if (parsed.settlements.length || parsed.messages.some(m => m.kind !== 'text') || parsed.messages.length !== 1) {
-        const currentAssets = win.indexedDB ? await library.list() : []; if (!current()) return;
+        const currentAssets = win.indexedDB ? await library.available(captured.book.id, id) : []; if (!current()) return;
         for (const m of parsed.messages) if (m.kind === 'sticker' && !currentAssets.some(a => a.id === m.sticker.assetId && a.allowedAI && !a.hidden && a.description === m.sticker.description)) throw Error('表情包授权或描述已变化，本次回复未保存');
         const delivery = createDelivery(history, id, parsed.messages, parsed.settlements, true);
         // Validate before showing a pending operation. Invalid AI output cannot poison retries.
@@ -123,6 +123,7 @@ export function createMessenger(win, profiles) {
     history: () => history,
     status: () => ({ error, reading, generating: job?.id, change }), draft,
     requestReply, cancelReply, library: () => library, sessionSignal: () => sessionSignal,
+    async stickerPeople(){const captured=session,signal=sessionSignal;profiles.assertSession(captured,signal);const fresh=await profiles.load(signal);profiles.assertSession(captured,signal);if(fresh.book.id!==captured.book.id)throw Error('存档已变化');return {archiveId:fresh.book.id,people:fresh.book.people.filter(p=>!p.deletedAt).map(p=>({id:p.id,name:p.remark||p.name}))};},
     async sendSticker(id, assetId, signal) { const state = draft(id); if (state.sendingSticker) return; state.sendingSticker = true;
       try { const ticket = epoch, captured = library; const asset = await captured.get(assetId); if (ticket !== epoch || signal?.aborted) return; if (!asset || asset.hidden) throw Error('找不到可用的表情包'); deliver(id, [stickerPayload(asset)]); }
       finally { state.sendingSticker = false; } },
@@ -147,7 +148,7 @@ export function createMessenger(win, profiles) {
     retry: id => execute(id), refresh: () => refresh(true),
     async endSend(id) { const state = draft(id), op = state.operation, ticket = epoch; if (!op || op.busy) return; await refresh(); if (ticket === epoch && state.operation === op && history) { state.operation = null; emit(); } },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    dirty: () => !!job || !!change || [...drafts.values()].some(d => d.text.length || d.operation || d.editing || d.quoteId || d.sendingSticker || d.attachment && (d.attachment.busy || d.attachment.amount || d.attachment.note || d.attachment.urls || d.attachment.description || d.attachment.files?.length || Object.keys(d.attachment.assetEdits || {}).length)),
+    dirty: () => !!job || !!change || [...drafts.values()].some(d => d.text.length || d.operation || d.editing || d.quoteId || d.sendingSticker || d.attachment && (d.attachment.busy || d.attachment.amount || d.attachment.note || d.attachment.urls || d.attachment.description || d.attachment.files?.length || Object.keys(d.attachment.assetEdits || {}).length || Object.keys(d.attachment.groupDrafts || {}).length || d.attachment.fileDescriptions?.length || d.attachment.newCategory)),
     reset() { cancelReply(); epoch++; drafts.clear(); change = undefined; store = undefined; history = undefined; reading = false; error = ''; listeners.clear(); },
   };
 }

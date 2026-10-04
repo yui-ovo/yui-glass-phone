@@ -86,3 +86,8 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 ## 0.9.4 当前灰玻璃适配
 
 按用户要求在 0.9.3 的面板功能与入口基础上，使用本项目 cv2 灰玻璃配色、渐变和边框重做视觉层；转账金额与备注 DOM 继续安全文本渲染。未复制其他作者代码或新增旧脚本依赖。
+
+
+## 0.10.0 按分类分配表情包与转账
+
+阅读用户 yui-ovo/yuii/phone-ui.js 的 renderStickers、renderStickerTabs、addSticker、openRoleBindingModal、saveRoleBinding、deleteCategory、批量删除，以及 sendTransferBtn、handleMoneyBubbleClick、showTransferActionModal。按其分类/长按/角色分配与转账收退流程重写新模块，不复用按名字/数组下标关联、宽松 parseFloat、同层同步或 HTML 拼接。类别用 UUID，权限用存档/人物 ID；数据仅新手机独立 IndexedDB。旧白底 HTML 不参与本轮。
