@@ -18,8 +18,17 @@ test('worldbook choices exclude every primary/auxiliary binding, preserve curren
   assert.deepEqual(classifyWorldbooks(ctx, names, settings).current, ['当前主书', '当前副书']);
 });
 
-test('unknown or shallow binding metadata fails closed; verified current books remain available', () => {
-  for (const mutate of [ctx=>ctx.characters[7].shallow=true, ctx=>delete ctx.characters[7].data, ctx=>ctx.characters[7].data.extensions.world=7]) {
+test('shallow ST/TT cards with explicit world metadata remain classifiable without hydrating cards', () => {
+  const ctx=fixture();for(const c of Object.values(ctx.characters))c.shallow=true;
+  ctx.characters[99]={...card('unbound.png'),shallow:true};
+  const before=clone(ctx);assert.deepEqual(classifyWorldbooks(ctx,names,settings),{current:['当前主书','当前副书'],unbound:['通用书'],warning:''});assert.deepEqual(ctx,before);
+  Object.defineProperty(ctx.characters[7],'description',{get(){throw Error('must not read character content');}});
+  ctx.unshallowCharacter=()=>{throw Error('must not hydrate characters');};
+  assert.deepEqual(classifyWorldbooks(ctx,names,settings).unbound,['通用书']);
+});
+
+test('missing or malformed binding metadata fails closed; verified current books remain available', () => {
+  for (const mutate of [ctx=>{ctx.characters[7].shallow=true;delete ctx.characters[7].data.extensions.world;},ctx=>{ctx.characters[7].shallow=true;ctx.characters[7].data.extensions.world=undefined;}, ctx=>delete ctx.characters[7].data, ctx=>ctx.characters[7].data.extensions.world=7]) {
     const ctx = fixture(); mutate(ctx); const result = classifyWorldbooks(ctx,names,settings);
     assert.deepEqual(result.unbound,[]); assert(result.warning.includes('无法确认')); assert(result.current.includes('当前主书'));
   }

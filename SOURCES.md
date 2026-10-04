@@ -55,3 +55,13 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 - TT main，commit a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375：[world-info.js](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/world-info.js)、[st-context.js](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/st-context.js)。同源模块只读设置与已有 context 角色元数据，条目继续走 loadWorldInfo；不调用 ST 服务端接口或 TT 私有 invoke。
 
 缺少完整角色资料/额外绑定时返回未知，不自动调用 unshallowCharacter 或读取其他卡/历史。当前宿主源码与模拟检查不代表 TT 2.3.0 真机或所有 ST 版本验收。文件解析、复选交互和导入标识由本项目独立实现；外部内容仅作为文本保存。
+
+## 0.8.1 精简角色字段核对
+
+修正上一版把 shallow 标记本身视为未知绑定的判断。核实 TT v2.3.0 标签对应 a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375：
+
+- [TT CharacterDto](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src-tauri/crates/tt-application/src/dto/character_dto.rs)：精简角色 extensions 明确保留 world。
+- [TT 前端角色转换](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/tauri/main/services/characters/character-service.js)：映射到 data.extensions，shallow 标记继续保留。
+- [ST toShallow](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/src/endpoints/characters.js)：精简角色同样保留 data.extensions.world，默认空字符串。
+
+本项目只读取已有元数据，不调用这些服务端或原生私有实现；字段缺失时继续返回未知。

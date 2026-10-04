@@ -55,7 +55,7 @@ export function apiSettings({ win, base, el, button }) {
 export function materialEditor({ win, scroll, draft, el, button, current, status }) {
   let active = true, busy = false, ticket = 0, displayed = [], mode = '';
   const section = el('details', 'profile-trace'), saved = el('div'), results = el('div', 'worldbook-results');
-  const summary = el('p', 'material-summary'), notice = el('p', 'profile-help');
+  const summary = el('p', 'material-summary'), notice = el('p', 'profile-help worldbook-notice'); notice.setAttribute('role', 'status');
   const choices = el('div', 'worldbook-sources'), books = el('select', 'worldbook-select'); books.hidden = true; books.setAttribute('aria-label', '选择世界书');
   const file = el('input', 'worldbook-file'); file.type = 'file'; file.accept = '.json,application/json'; file.hidden = true; file.setAttribute('aria-label', '导入世界书文件');
   const isCurrent = () => active && current();
@@ -112,10 +112,10 @@ export function materialEditor({ win, scroll, draft, el, button, current, status
       saved.append(group);
     }
   }
-  function showEntries(entries) {
+  function showEntries(entries, emptyMessage = '这本世界书没有条目') {
     displayed = entries; results.replaceChildren();
     if (entries.length) { results.append(el('p', 'profile-help', worldbookLabel(entries[0].world))); for (const entry of entries) results.append(row(entry)); }
-    else results.append(el('p', 'profile-help', '这本世界书没有条目'));
+    else if (emptyMessage) results.append(el('p', 'profile-help', emptyMessage));
     renderSaved(); refresh();
   }
   function fillBooks(names) {
@@ -123,18 +123,18 @@ export function materialEditor({ win, scroll, draft, el, button, current, status
   }
   function browse(kind) {
     void work(async valid => {
-      notice.textContent = '正在核对世界书绑定…'; const available = await worldbookChoices(win); if (!valid()) return;
-      mode = kind; const names = available[kind]; fillBooks(names); showEntries([]);
-      notice.textContent = available.warning || (names.length ? '直接勾选需要的条目；点标题查看内容。' : kind === 'current' ? '当前角色没有已确认的绑定世界书' : '没有未绑定角色的世界书');
+      fillBooks([]); showEntries([], ''); notice.textContent = '正在核对世界书绑定…'; const available = await worldbookChoices(win); if (!valid()) return;
+      mode = kind; const names = available[kind]; fillBooks(names);
+      notice.textContent = available.warning || (names.length ? '已找到 ' + names.length + ' 本' + (kind === 'current' ? '当前角色世界书' : '其他世界书') + '，可选择书名并勾选条目。' : kind === 'current' ? '当前角色没有已确认的绑定世界书' : '没有可添加的其他世界书（已排除角色绑定）');
       if (names.length) { const entries = await worldEntries(win, names[0]); if (valid()) showEntries(entries); }
     });
   }
   books.onchange = () => {
     const name = books.value, kind = mode;
     void work(async valid => {
-      const available = await worldbookChoices(win); if (!valid()) return;
-      if (!available[kind]?.includes(name)) { fillBooks([]); showEntries([]); throw Error(available.warning || '这本书的绑定已变化，请重新选择'); }
-      const entries = await worldEntries(win, name); if (valid()) showEntries(entries);
+      showEntries([], ''); notice.textContent = '正在读取所选世界书…'; const available = await worldbookChoices(win); if (!valid()) return;
+      if (!available[kind]?.includes(name)) { fillBooks([]); throw Error(available.warning || '这本书的绑定已变化，请重新选择'); }
+      const entries = await worldEntries(win, name); if (valid()) { showEntries(entries); notice.textContent = '已读取条目，勾选后保存人物即可。'; }
     });
   };
   file.onchange = () => {
@@ -145,7 +145,7 @@ export function materialEditor({ win, scroll, draft, el, button, current, status
       notice.textContent = '文件已预览。勾选后保存人物，只保存所选内容；不会安装到酒馆或自动启用条目。';
     });
   };
-  choices.append(button('当前角色世界书', () => browse('current'), 'worldbook-source'), button('添加未绑定角色的世界书', () => browse('unbound'), 'worldbook-source'), button('导入文件', () => file.click(), 'worldbook-source'));
+  choices.append(button('当前角色世界书', () => browse('current'), 'worldbook-source'), button('添加其他世界书', () => browse('unbound'), 'worldbook-source'), button('导入文件', () => file.click(), 'worldbook-source'));
   section.append(summary, choices, file, notice, books, results, saved, el('p', 'profile-help', '最多保留 20 条、共 4 万字；导入文件最多 2 MB、500 条。取消勾选保留原快照，不计入本次回复字数。'));
   scroll.append(section); renderSaved(); refresh();
   return { busy: () => busy, dispose() { active = false; ticket++; } };

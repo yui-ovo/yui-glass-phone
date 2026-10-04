@@ -19,10 +19,12 @@ export function classifyWorldbooks(ctx, names, settings) {
   for (const card of cards) {
     if (!record(card) || !validName(card.avatar) || seen.has(card.avatar)) { problems.push('角色身份信息不完整'); continue; }
     seen.add(card.avatar);
-    // Shallow cards can omit their primary book even when some data is present.
-    if (card.shallow || !record(card.data)) { problems.push('有角色资料尚未完整加载'); continue; }
+    if (!record(card.data)) { problems.push('有角色缺少世界书绑定字段'); continue; }
     const extensions = card.data.extensions;
     if (extensions !== undefined && !record(extensions)) { problems.push('角色绑定格式无法确认'); continue; }
+    // ST and TT 2.3.0 keep world in shallow projections. An explicit empty
+    // string means unbound; a missing field must still remain unknown.
+    if (card.shallow && (!record(extensions) || !Object.hasOwn(extensions, 'world') || typeof extensions.world !== 'string')) { problems.push('有精简角色资料缺少世界书绑定字段'); continue; }
     const name = extensions?.world;
     if (name !== undefined && name !== '' && !validName(name)) { problems.push('角色绑定格式无法确认'); continue; }
     if (name) { bound.add(name); if (card.avatar === activeAvatar) current.add(name); }
