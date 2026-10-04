@@ -46,3 +46,12 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 ## 0.7.0 消息操作设计
 
 按用户确认的交互方案独立实现：灵动岛显示请求状态，气泡长按菜单，规范化消息编辑/删除/引用与原宿主存储整合。前一轮讨论参考了 Phone Mode 的独立提示词组织和柚月的长按/多选交互说明与源码，仅用于理解行为，没有复制其提示词、实现、UI 或素材。
+
+## 0.8.0 世界书绑定读取
+
+2026-10-05 核对官方宿主源码，未引入其他作者小手机实现：
+
+- ST release，commit 06bde939fb1e9c4c8d8641d810f0a916b5bce127：[world-info.js](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/world-info.js)、[utils.js](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/utils.js)。主绑定来自 character.data.extensions.world；额外绑定来自 getWorldInfoSettings().world_info.charLore，name 对应去扩展名的 avatar 文件标识。
+- TT main，commit a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375：[world-info.js](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/world-info.js)、[st-context.js](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/st-context.js)。同源模块只读设置与已有 context 角色元数据，条目继续走 loadWorldInfo；不调用 ST 服务端接口或 TT 私有 invoke。
+
+缺少完整角色资料/额外绑定时返回未知，不自动调用 unshallowCharacter 或读取其他卡/历史。当前宿主源码与模拟检查不代表 TT 2.3.0 真机或所有 ST 版本验收。文件解析、复选交互和导入标识由本项目独立实现；外部内容仅作为文本保存。

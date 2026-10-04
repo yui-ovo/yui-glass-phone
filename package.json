@@ -1,11 +1,11 @@
 {
   "name": "yui-glass-phone",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "node tests/browser.mjs && node tests/messages-browser.mjs && node tests/ai-browser.mjs && node tests/message-actions-browser.mjs"
+    "test:browser": "node tests/browser.mjs && node tests/messages-browser.mjs && node tests/ai-browser.mjs && node tests/message-actions-browser.mjs && node tests/worldbooks-browser.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -59,7 +59,7 @@ try {
   assert.equal(await popup.locator('h2').count(),0);assert.equal(await b(page,'关闭菜单').count(),0);
   assert.equal(await layer(page).evaluate(node=>getComputedStyle(node).backdropFilter || getComputedStyle(node).webkitBackdropFilter),'none');
   const menuRect=await popup.boundingBox(),bubbleRect=await bubble.boundingBox(),frameRect=await page.locator('.directory-view').boundingBox();
-  assert(menuRect.height<90 && menuRect.width<=280);assert(menuRect.x>=frameRect.x && menuRect.x+menuRect.width<=frameRect.x+frameRect.width);
+  assert(menuRect.height<=56 && menuRect.width<=230);assert(menuRect.x>=frameRect.x && menuRect.x+menuRect.width<=frameRect.x+frameRect.width);
   assert(Math.abs(menuRect.y+menuRect.height-bubbleRect.y)<12 || Math.abs(menuRect.y-bubbleRect.y-bubbleRect.height)<12,'popup next to selected bubble');
   await layer(page).click({position:{x:8,y:frameRect.height-8}});assert(await layer(page).isHidden());
   await menu(page);await page.keyboard.press('Escape');assert(await layer(page).isHidden());

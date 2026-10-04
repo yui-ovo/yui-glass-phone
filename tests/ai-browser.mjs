@@ -30,6 +30,7 @@ try {
     if(tt)await page.addInitScript({content:await readFile(path.join(root,'tests/tt-mock.js'),'utf8')});
     else await page.route('**/api/users/me',route=>route.fulfill({json:{handle:'test-user'}}));
     await page.route('**/scripts/personas.js',route=>route.fulfill({contentType:'text/javascript',body:'export const user_avatar="test-user.png";'}));
+    await page.route('**/scripts/world-info.js',route=>route.fulfill({contentType:'text/javascript',body:'export function getWorldInfoSettings(){return {world_info:{}};}'}));
     await page.route('**/thumbnail?**',route=>route.fulfill({contentType:'image/png',body:png}));
     const requests=[];let mode='normal',release;
     await page.route('https://ai.fixture.test/**',async route=>{
@@ -49,9 +50,9 @@ try {
     if(!tt)await page.screenshot({path:path.join(root,'test-results/ai-settings.png')});
     await home(page);await b(page,'打开消息').click();await b(page,'联系人').click();await b(page,'登记人物').click();await b(page,'从当前角色卡带入').click();
     await page.getByLabel('人物名字',{exact:true}).fill('小晴');await page.getByLabel('线上人设（如有）',{exact:true}).fill('爱用表情');await page.getByLabel('开局关系',{exact:true}).selectOption('friend');
-    await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'读取世界书列表').click();await page.getByLabel('选择世界书',{exact:true}).selectOption('设定书');await b(page,'打开条目').click();
-    await page.getByText('线上习惯',{exact:true}).click();await b(page,'添加此条参考').first().click();await wait(()=>page.getByLabel('参考：设定书 · 线上习惯',{exact:true}).count(),'material');
-    await page.getByText('无关支线',{exact:true}).click();await b(page,'添加此条参考').last().click();await wait(()=>page.getByLabel('参考：设定书 · 无关支线',{exact:true}).count(),'material2');await page.getByLabel('参考：设定书 · 无关支线',{exact:true}).uncheck();
+    await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'添加未绑定角色的世界书').click();
+    const habit=page.getByLabel('参考：设定书 · 线上习惯',{exact:true}),branch=page.getByLabel('参考：设定书 · 无关支线',{exact:true});
+    await habit.check();await wait(()=>habit.isEnabled(),'habit saved');await branch.check();await wait(()=>branch.isEnabled(),'branch saved');await branch.uncheck();
     await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'),'profile');
     if(!tt)await page.screenshot({path:path.join(root,'test-results/ai-materials.png')});
     await b(page,'取消').click();await home(page);await b(page,'打开消息').click();await b(page,'我').click();await b(page,'我的名片').click();
