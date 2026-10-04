@@ -35,6 +35,7 @@ async function add(page, name, relation = 'friend', card = true) {
   if (card) assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '花店故事标题');
   await page.getByLabel('人物名字', { exact: true }).fill(name); await page.getByLabel('开局关系', { exact: true }).selectOption(relation);
 }
+async function openChat(page,name) { const contact=b(page,`查看联系人：${name}`); if(await contact.count()){await contact.click();await b(page,'发消息').click();} else await b(page,`打开聊天：${name}`).click(); }
 async function save(page) { await b(page, '保存人物').click(); await until(async () => (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'), 'save'); }
 async function storage(page, tt = false) { return page.evaluate(tt => JSON.parse(localStorage.getItem(tt ? 'fixture.tt.store' : 'yui-glass-phone.contacts.v1:test-user') || 'null'), tt); }
 async function books(page, tt = false) { const data = await storage(page, tt); return tt ? Object.values(data || {}) : Object.values(data?.books || {}); }
@@ -83,6 +84,7 @@ try {
     r=await launcher.boundingBox();await p.mouse.click((tt?375:393)-8,r.y+22);assert(await p.locator('.overlay').isVisible());await b(p,'收起手机').click();
     await p.setViewportSize({width:320,height:568});
     if(tt)await p.evaluate(()=>ttMock.emitLayout({version:1,safeFrame:{left:0,top:20,width:320,height:500},ime:{keyboardOffset:0}}));
+    await until(async()=>Math.round((await launcher.boundingBox()).x)===298,'launcher viewport resize');
     r=await launcher.boundingBox();assert.equal(Math.round(r.x),298);assert(r.y>=0&&r.y+r.height<=568);
     // Cancelling a drag restores its prior position and does not persist a partial move.
     const before=await p.evaluate(()=>localStorage.getItem('yui-glass-phone.launcher.v1'));
@@ -120,14 +122,14 @@ try {
     assert.equal(await page.locator('.directory-scroll').getByText('尚不认识', { exact: true }).count(), 1);
     await b(page, '返回手机桌面').click(); await open(page); await b(page, '联系人').click();
     assert.equal(await page.locator('.contact-row').count(), 1);
-    await b(page, '打开聊天：阿棠').click(); assert.equal(await page.locator('.directory-empty').textContent(), '暂无消息'); assert(await b(page, '发送').isDisabled());
+    await openChat(page,'阿棠'); assert.equal(await page.locator('.directory-empty').textContent(), '暂无消息'); assert(await b(page, '发送').isDisabled());
     await b(page, '聊天资料').click(); assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '<img src=x onerror=alert(1)>');
     assert.equal(await page.locator('.directory-view img[src="x"]').count(), 0);
     await page.getByLabel('手机备注', { exact: true }).fill('老板'); await save(page);
     const modified = (await books(page, tt))[0].people[0];
     for (const field of ['id', 'account', 'source', 'relation']) assert.deepEqual(modified[field], original.people[0][field]);
     await b(page, '取消').click();
-    await page.reload(); await open(page); await b(page, '打开聊天：老板').click(); await b(page, '聊天资料').click();
+    await page.reload(); await open(page); await openChat(page,'老板'); await b(page, '聊天资料').click();
     assert.equal(await page.getByLabel('手机备注', { exact: true }).inputValue(), '老板');
     await page.getByLabel('手机备注', { exact: true }).fill('不保存'); await b(page, '收起手机').click(); await b(page, '打开灰玻璃小手机').click();
     assert.equal(await page.getByLabel('手机备注', { exact: true }).inputValue(), '不保存'); await b(page, '取消').click();
@@ -156,7 +158,7 @@ try {
   assert.equal(await page.locator('.conversation').count(), 3); await b(page, '返回手机桌面').click(); await b(page, '打开设置').click(); await b(page, '退出样式演示').click(); await open(page);
   assert.equal(await page.locator('.conversation').count(), 0); assert.equal((await books(page))[0].people.length, 1);
   await b(page, '联系人').click(); await mkdir(path.join(root, 'test-results'), {recursive:true}); await page.screenshot({path:path.join(root,'test-results/contacts.png')});
-  await b(page, '打开聊天：保存失败草稿').click(); await b(page, '聊天资料').click(); await page.screenshot({path:path.join(root,'test-results/profile.png')});
+  await openChat(page,'保存失败草稿'); await b(page, '聊天资料').click(); await page.screenshot({path:path.join(root,'test-results/profile.png')});
   assert.deepEqual(page.errors, []); await page.close(); passed.push('ST: quota failure keeps draft, retry is idempotent, explicit demo isolation, screenshots');
   // Real editor round trips preserve worldbook data, self identity and avatars.
   const avatarPage = await start(); await open(avatarPage); await add(avatarPage, '头像人物');
@@ -173,7 +175,7 @@ try {
   await b(avatarPage,'取消').click();
   const materials=[{world:'设定',uid:'1',title:'<img src=x>',content:'<script>仅文字</script>',fingerprint:'sha256:'+'a'.repeat(64),confirmedAt:'2026-10-04T00:00:00Z'}];
   await avatarPage.evaluate(materials=>{const key='yui-glass-phone.contacts.v1:test-user';const registry=JSON.parse(localStorage.getItem(key));Object.values(registry.books)[0].people[0].roleplayMaterials=materials;localStorage.setItem(key,JSON.stringify(registry));},materials);
-  await avatarPage.reload();await open(avatarPage);await b(avatarPage,'打开聊天：头像人物').click();await b(avatarPage,'聊天资料').click();await avatarPage.getByLabel('手机备注',{exact:true}).fill('保留资料');await save(avatarPage);
+  await avatarPage.reload();await open(avatarPage);await openChat(avatarPage,'头像人物');await b(avatarPage,'聊天资料').click();await avatarPage.getByLabel('手机备注',{exact:true}).fill('保留资料');await save(avatarPage);
   assert.deepEqual((await books(avatarPage))[0].people[0].roleplayMaterials,materials);
   await b(avatarPage,'取消').click();await b(avatarPage,'返回手机桌面').click();await open(avatarPage);await b(avatarPage,'我').click();await b(avatarPage,'我的名片').click();
   const selfAccount=(await books(avatarPage))[0].self.account; await avatarPage.getByLabel('我的名字',{exact:true}).fill('玩家名字');await b(avatarPage,'保存我的名片').click();await until(async()=> (await avatarPage.locator('.profile-status').textContent()).includes('已保存'), 'self');

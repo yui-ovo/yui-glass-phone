@@ -49,6 +49,7 @@ export function validateBook(book) {
   for (const person of book.people) {
     if (!record(person) || !string(person.id, 128, true) || ids.has(person.id) || !string(person.name, 80, true) || !string(person.remark, 80) || !string(person.description, 1000)) throw Error('人物资料无效，请检查名字、备注和设定');
     ids.add(person.id); account(person.account);
+    if (person.deletedAt !== undefined && (typeof person.deletedAt !== 'string' || !Number.isFinite(Date.parse(person.deletedAt)))) throw Error('人物删除记录格式无效，已停止保存');
     if (!record(person.source) || !['card', 'manual', 'worldbook'].includes(person.source.kind) || !string(person.source.name, 2000)
       || (person.source.avatarFile !== undefined && !string(person.source.avatarFile, 1000, true))) throw Error('人物来源无效');
     const rel = person.relation;

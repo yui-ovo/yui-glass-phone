@@ -36,6 +36,10 @@ for(const tt of [false,true])test(`${tt?'TT':'ST'} independent message storage, 
   await f.store.send(createMessage(f.book.id,f.friend.id,'第二条',2),1);assert.equal(f.friend.remark,'新备注');assert.equal(f.friend.avatar.kind,'url');
   await assert.rejects(f.store.send(createMessage(f.book.id,f.friend.id,'冲突',2),1),/其他窗口/);assert.equal((await f.store.read()).messages.length,2);
   f.friend.relation.friend=false;await assert.rejects(f.store.send(createMessage(f.book.id,f.friend.id,'不是好友',3),2),/好友/);
+  f.friend.relation.friend=true;f.friend.deletedAt=new Date().toISOString();
+  await assert.rejects(f.store.send(createMessage(f.book.id,f.friend.id,'已删除',3),2),/好友/);
+  assert.equal((await f.store.send(a,0)).messages.length,2);assert.equal(f.state.writes,2);
+  delete f.friend.deletedAt;await f.store.send(createMessage(f.book.id,f.friend.id,'恢复后',3),2);assert.equal((await f.store.read()).messages.length,3);
 });
 test('TT successful write with failed confirmation retries same ID without another write',async()=>{
   const f=fixture(true),message=createMessage(f.book.id,f.friend.id,'保存结果不明',1);f.state.loseConfirmation=true;

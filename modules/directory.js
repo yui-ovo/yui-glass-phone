@@ -11,7 +11,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   const messenger = createMessenger(win, host);
   let clearMessageView;
   let session, selected, route = 'messages', loadError = '', loading = false, dead = false;
-  let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people';
+  let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people', chatBack = 'messages';
   function el(tag, cls = '', text) { const node = doc.createElement(tag); node.className = cls; if (text !== undefined) node.textContent = text; return node; }
   function button(text, run, cls = 'profile-action') { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', run); return b; }
   function symbol(name) { const span = el('span', 'menu-icon'); span.innerHTML = icon(name); return span; }
@@ -31,11 +31,12 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   const relationship = p => p.relation.friend ? '已是好友' : p.relation.known ? '认识但未加好友' : '尚不认识';
   function empty(scroll, text) { scroll.append(el('p', 'directory-empty', text)); }
   function personRow(person, manage = false) {
-    const row = button('', () => { selected = person.id; lastFormRoute = manage ? 'people' : 'chat'; go(manage ? 'details' : 'chat'); }, 'contact-row');
-    row.setAttribute('aria-label', `${manage ? '编辑' : '打开聊天：'}${displayName(person)}`);
+    const contact = !manage && route === 'contacts';
+    const row = button('', () => { selected = person.id; lastFormRoute = manage ? 'people' : contact ? 'contact-card' : 'chat'; chatBack = 'messages'; go(manage ? 'details' : contact ? 'contact-card' : 'chat'); }, 'contact-row');
+    row.setAttribute('aria-label', `${manage ? '编辑' : contact ? '查看联系人：' : '打开聊天：'}${displayName(person)}`);
     const history = messenger.history(), latest = history && latestMessage(history, person.id);
     row.dataset.search = `${person.name} ${person.remark} ${!manage && history ? forPerson(history, person.id).map(m => m.text).join(' ') : ''}`.toLowerCase();
-    const copy = el('span', 'directory-person'); copy.append(el('strong', '', displayName(person)), el('small', 'message-summary', manage ? relationship(person) : latest ? latest.text.replace(/\s+/g, ' ').slice(0, 80) : history ? '暂无消息' : '消息暂不可读取'));
+    const copy = el('span', 'directory-person'); copy.append(el('strong', '', displayName(person)), el('small', 'message-summary', manage ? relationship(person) : contact ? (person.remark ? `名字：${person.name}` : `账号：${person.account}`) : latest ? latest.text.replace(/\s+/g, ' ').slice(0, 80) : history ? '暂无消息' : '消息暂不可读取'));
     row.append(avatar(person), copy, symbol('arrow')); return row;
   }
   function search(scroll) {
@@ -52,7 +53,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   }
   function clearEditor() { editor?.dispose(); editor = undefined; }
   function editorPage(self = false, freshSource) {
-    const original = freshSource !== undefined ? newPerson(freshSource || undefined, freshSource?.name || '') : self ? session.book.self : session.book.people.find(p => p.id === selected);
+    const original = freshSource !== undefined ? newPerson(freshSource || undefined, freshSource?.name || '') : self ? session.book.self : session.book.people.find(p => p.id === selected && !p.deletedAt);
     if (!original) { const { wrap, scroll } = base('人物资料', 'people'); empty(scroll, '找不到这个人物，请返回人物管理重新选择'); return wrap; }
     const draft = clone(original), captured = session, epoch = generation, signal = controller.signal;
     const { wrap, scroll } = base(self ? '我的名片' : '人物资料', self ? 'me' : lastFormRoute);
@@ -125,10 +126,60 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }, 'profile-action primary');
     const cancel = button('取消', () => { if (saving) return; clearEditor(); go(self ? 'me' : lastFormRoute); });
     const actions = el('div', 'profile-actions'); actions.append(save, cancel); scroll.append(status, actions);
+    if (!self && persisted) scroll.append(button('删除人物', () => go('delete-person'), 'profile-action danger'));
     renderAvatar();
     editor = { saving: () => saving, dirty: () => !persisted || saving || busy || !sameJson(draft, baseline) || url.value !== baselineUrl,
       dispose() { active = false; imageTicket++; pendingImage?.abort(); }, draft };
     return wrap;
+  }
+  function removalPage(restore = false) {
+    const captured = session, epoch = generation, signal = controller.signal;
+    const person = captured.book.people.find(p => p.id === selected && !!p.deletedAt === restore);
+    const back = restore ? 'deleted-people' : 'people';
+    const { wrap, scroll } = base(restore ? '恢复人物' : '删除人物', back);
+    if (!person) { empty(scroll, '找不到这个人物，请返回重新选择'); return wrap; }
+    scroll.append(avatar(person), el('h2', 'person-name', displayName(person)), el('p', 'profile-meta', `账号：${person.account}`));
+    scroll.append(el('p', 'profile-help', restore ? '恢复原人物、账号、关系和已保存的消息。' : '将从联系人、消息列表和人物管理中移除。资料和已保存消息保留，可在“人物管理 → 已删除人物”恢复。不会删除酒馆角色卡。'));
+    const status = el('p', 'profile-status'); status.setAttribute('role', 'status');
+    let busy = false, active = true;
+    const current = () => active && !dead && session === captured && generation === epoch;
+    const commit = button(restore ? '确认恢复' : '确认删除', async () => {
+      if (!current() || busy) return;
+      const pending = messenger.draft(person.id);
+      if (!restore && (pending.text || pending.operation)) { status.textContent = '此人物有未发送草稿或未确认消息，请先在聊天页处理后再删除'; return; }
+      const book = clone(captured.book), target = book.people.find(p => p.id === person.id);
+      if (!target || !!target.deletedAt !== restore) { status.textContent = '人物状态已变化，请返回重新读取'; return; }
+      if (restore) delete target.deletedAt; else target.deletedAt = new Date().toISOString();
+      busy = true; commit.disabled = true; cancel.disabled = true; status.textContent = '正在保存…';
+      try {
+        await host.save(captured, book, signal);
+        if (current()) { busy = false; go(back); notify(restore ? '人物已恢复' : '人物已移到已删除人物'); }
+      } catch (error) { if (current()) status.textContent = `${error.message || '保存未确认'}；如状态不明，请刷新后核对`; }
+      finally { if (current()) { busy = false; commit.disabled = false; cancel.disabled = false; } }
+    }, `profile-action ${restore ? 'primary' : 'danger'}`);
+    const cancel = button('取消', () => { if (!busy) go(back); });
+    scroll.append(status, commit, cancel);
+    editor = { saving: () => busy, dirty: () => busy, dispose() { active = false; } };
+    return wrap;
+  }
+  function contactCard() {
+    const person = session.book.people.find(p => p.id === selected && !p.deletedAt && p.relation.friend);
+    const edit = () => { lastFormRoute = 'contact-card'; go('details'); };
+    const more = button('', edit, 'icon-button'); more.setAttribute('aria-label', '联系人资料设置'); more.innerHTML = icon('more');
+    const { wrap, scroll } = base('联系人名片', 'contacts', person ? more : undefined);
+    if (!person) { empty(scroll, '此人物已不在好友中，请返回联系人或人物管理'); return wrap; }
+    scroll.classList.add('person-card-scroll');
+    const hero = el('div', 'person-card-hero'), copy = el('div', 'person-card-copy');
+    copy.append(el('h2', 'person-name', displayName(person)));
+    if (person.remark) copy.append(el('p', 'profile-meta', `名字：${person.name}`));
+    copy.append(el('p', 'profile-meta', `账号：${person.account}`)); hero.append(avatar(person), copy); scroll.append(hero);
+    const menu = el('div', 'glass-menu');
+    for (const [label, action, glyph] of [['朋友资料', edit, 'contacts'], ['朋友圈', () => notify('朋友圈功能尚未接入'), 'moments']]) {
+      const row = button('', action, 'menu-row'); row.setAttribute('aria-label', label); row.append(symbol(glyph), el('span', '', label), symbol('arrow')); menu.append(row);
+    }
+    const send = button('', () => { chatBack = 'contact-card'; go('chat'); }, 'person-card-action'); send.setAttribute('aria-label', '发消息'); send.append(symbol('message'), el('span', '', '发消息'));
+    const call = button('', () => notify('音视频通话功能尚未接入'), 'person-card-action'); call.setAttribute('aria-label', '音视频通话'); call.append(symbol('phone'), el('span', '', '音视频通话'));
+    const actions = el('div', 'glass-menu'); actions.append(send, call); scroll.append(menu, actions); return wrap;
   }
   function render(target) {
     route = target; clearEditor(); clearMessageView?.(); clearMessageView = undefined;
@@ -140,6 +191,18 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       else void load(); return wrap;
     }
     if (target === 'details') return editorPage();
+    if (target === 'contact-card') return contactCard();
+    if (target === 'delete-person') return removalPage();
+    if (target === 'restore-person') return removalPage(true);
+    if (target === 'deleted-people') {
+      const { wrap, scroll } = base('已删除人物', 'people');
+      const removed = session.book.people.filter(p => p.deletedAt);
+      for (const person of removed) {
+        const row = button('', () => { selected = person.id; go('restore-person'); }, 'contact-row'); row.setAttribute('aria-label', `恢复人物：${displayName(person)}`);
+        const copy = el('span', 'directory-person'); copy.append(el('strong', '', displayName(person)), el('small', '', `账号：${person.account}`)); row.append(avatar(person), copy, symbol('arrow')); scroll.append(row);
+      }
+      if (!removed.length) empty(scroll, '暂无已删除人物'); return wrap;
+    }
     if (target === 'self') return editorPage(true);
     if (target === 'new-card') {
       const source = session.snapshot.source;
@@ -147,11 +210,12 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       if (existing.length) {
         const { wrap, scroll } = base('此角色卡已有登记', 'add');
         scroll.append(el('p', 'profile-help', '修改开局关系或资料，请点下面已有的人物。只有这张卡里确实还有另一位人物时，才继续新登记。'));
-        for (const person of existing) {
+        for (const person of existing.filter(p => !p.deletedAt)) {
           const row = personRow(person, true);
           row.querySelector('small').textContent = `${relationship(person)} · 账号 ${person.account}`;
           scroll.append(row);
         }
+        if (existing.some(p => p.deletedAt)) scroll.append(button('查看已删除人物', () => go('deleted-people')));
         scroll.append(button('登记这张卡里的另一位人物', () => go('new-card-extra')));
         return wrap;
       }
@@ -160,9 +224,9 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     if (target === 'new-card-extra') return editorPage(false, session.snapshot.source);
     if (target === 'new-manual') return editorPage(false, null);
     if (target === 'chat') {
-      const person = session.book.people.find(p => p.id === selected && p.relation.friend);
+      const person = session.book.people.find(p => p.id === selected && p.relation.friend && !p.deletedAt);
       const more = button('', () => { lastFormRoute = 'chat'; go('details'); }, 'icon-button'); more.setAttribute('aria-label', '聊天资料'); more.innerHTML = icon('more');
-      const { wrap, scroll } = base(person ? displayName(person) : '聊天', 'contacts', person ? more : undefined);
+      const { wrap, scroll } = base(person ? displayName(person) : '聊天', chatBack, person ? more : undefined);
       if (person) clearMessageView = mountConversation({wrap, scroll, person, self: session.book.self, messenger, el, button, avatar, icon});
       else empty(scroll, '找不到这个好友，请返回联系人');
       return wrap;
@@ -197,7 +261,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const add = button('', () => go('add'), 'icon-button'); add.setAttribute('aria-label', '登记人物'); add.innerHTML = icon('plus');
     const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', target === 'messages' ? undefined : add);
     search(scroll);
-    const list = manage ? session.book.people : session.book.people.filter(p => p.relation.friend);
+    const list = session.book.people.filter(p => !p.deletedAt && (manage || p.relation.friend));
     if (target === 'messages') {
       const history = messenger.history();
       if (history) list.sort((a, b) => (latestMessage(history, b.id)?.sequence || 0) - (latestMessage(history, a.id)?.sequence || 0));
@@ -207,16 +271,17 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     if (!list.length) empty(scroll, manage ? '此存档还没有登记人物' : '此存档暂无好友');
     const noMatch = el('p', 'directory-empty filter-empty', '没有找到相关联系人'); noMatch.hidden = true; scroll.append(noMatch);
     if (target === 'contacts') scroll.append(button('管理剧情人物', () => go('people')));
+    if (manage) scroll.append(button('已删除人物', () => go('deleted-people')));
     if (!manage) clearMessageView = messenger.subscribe(() => navigate(target, false, true));
     return wrap;
   }
   const unsubscribe = host.subscribe(() => {
     const hadDraft = editor?.dirty() || messenger.dirty(); clearEditor(); clearMessageView?.(); clearMessageView = undefined; messenger.reset(); controller.abort(); controller = new AbortController(); generation++; session = undefined; selected = undefined; loading = false; loadError = '';
-    if (['chat', 'details', 'new-card', 'new-card-extra', 'new-manual', 'self'].includes(route)) route = 'people';
+    if (['chat', 'contact-card', 'delete-person', 'restore-person', 'details', 'new-card', 'new-card-extra', 'new-manual', 'self'].includes(route)) route = 'people';
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'details', 'self'].includes(target),
+  return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
     dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },

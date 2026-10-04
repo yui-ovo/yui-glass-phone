@@ -54,9 +54,51 @@ try {
   const bubbles = page => page.locator('.real-messages .sp-message-bubble-cv2');
   async function sendText(page, text) { await textBox(page).fill(text); await b(page,'发送').click(); await until(async()=> (await textBox(page).inputValue())==='', 'message saved'); }
   async function backContacts(page) { await b(page,'返回手机桌面').click();await open(page); }
+  async function chat(page,name) {
+    if(await b(page,`查看联系人：${name}`).count()) await b(page,'消息').click();
+    await b(page,`打开聊天：${name}`).click();
+  }
+  for(const tt of [false,true]) {
+    const p=await start(tt);await open(p);await add(p,'名片人物');await save(p);await b(p,'取消').click();await backContacts(p);
+    await b(p,'查看联系人：名片人物').click();assert.equal(await textBox(p).count(),0);
+    assert.equal(await p.locator('.person-name').textContent(),'名片人物');
+    if(!tt)await p.screenshot({path:path.join(root,'test-results/contact-card.png')});
+    await b(p,'朋友资料').click();await p.getByLabel('手机备注',{exact:true}).fill('备注人物');await save(p);await b(p,'取消').click();
+    assert.equal(await p.locator('.person-name').textContent(),'备注人物');assert.equal(await textBox(p).count(),0);
+    await b(p,'朋友圈').click();assert((await p.locator('.toast').textContent()).includes('尚未接入'));
+    await b(p,'音视频通话').click();assert((await p.locator('.toast').textContent()).includes('尚未接入'));
+    await b(p,'发消息').click();await sendText(p,'删除恢复后保留的消息');await textBox(p).fill('未发送草稿');
+    await b(p,'返回').click();assert.equal(await p.locator('.person-name').textContent(),'备注人物');
+    await b(p,'联系人资料设置').click();await b(p,'删除人物').click();await b(p,'确认删除').click();
+    assert((await p.locator('.profile-status').textContent()).includes('未发送草稿'));await b(p,'取消').click();await backContacts(p);await chat(p,'备注人物');assert.equal(await textBox(p).inputValue(),'未发送草稿');await textBox(p).fill('');
+    await b(p,'聊天资料').click();await b(p,'删除人物').click();
+    const original=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0], history=await histories(p,tt);
+    await b(p,'取消').click();assert.deepEqual(tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0],original);
+    await b(p,'编辑备注人物').click();await b(p,'删除人物').click();
+    if(tt)await p.evaluate(()=>ttMock.fail=true);
+    else await p.evaluate(()=>{window.originalSet=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('yui-glass-phone.contacts'))throw Error('full');return originalSet.call(this,k,v);};});
+    await b(p,'确认删除').click();await until(async()=> (await p.locator('.profile-status').textContent()).includes('核对'),'deletion failure');
+    assert.deepEqual(tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0],original);
+    if(tt)await p.evaluate(()=>ttMock.fail=false);else await p.evaluate(()=>Storage.prototype.setItem=originalSet);
+    await b(p,'确认删除').click();await until(()=>b(p,'已删除人物').count(),'deleted');
+    assert.equal(await p.locator('.contact-row').count(),0);assert.deepEqual(await histories(p,tt),history);
+    await p.reload();await open(p);assert.equal(await p.locator('.contact-row').count(),0);await b(p,'消息').click();assert.equal(await p.locator('.contact-row').count(),0);
+    await b(p,'联系人').click();await b(p,'管理剧情人物').click();await b(p,'已删除人物').click();await b(p,'恢复人物：备注人物').click();await b(p,'确认恢复').click();await until(()=>p.getByText('暂无已删除人物',{exact:true}).count(),'restored');
+    const restored=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0];assert.deepEqual(restored.people,original.people);assert.deepEqual(await histories(p,tt),history);
+    await backContacts(p);await chat(p,'备注人物');assert.equal(await bubbles(p).textContent(),'删除恢复后保留的消息');
+    if(tt) {
+      await b(p,'聊天资料').click();await b(p,'删除人物').click();
+      await p.evaluate(()=>{ttMock.waitWrite=true;delete ttMock.releasewaitWrite;});await b(p,'确认删除').click();await p.waitForFunction(()=>ttMock.releasewaitWrite);
+      await p.evaluate(()=>profileMock.switch('0','delete-other-chat'));await until(()=>b(p,'登记人物').count(),'switch deleting');
+      await p.evaluate(()=>{ttMock.waitWrite=false;ttMock.releasewaitWrite();});await p.waitForTimeout(50);assert.equal(await p.locator('.contact-row').count(),0);
+      await p.evaluate(()=>profileMock.switch('0','chat-A','integrity-A'));await until(()=>b(p,'登记人物').count(),'return deleted archive');
+      const stored=Object.values(await storage(p,true)).find(v=>v.people?.some(x=>x.id===original.people[0].id));assert(stored.people[0].deletedAt);assert.deepEqual(await histories(p,true),history);
+    }
+    assert.deepEqual(p.errors,[]);await p.close();passed.push(`${tt?'TT':'ST'}: contact card/edit/back/chat, placeholder actions, deletion cancel/failure/draft guard, refresh hiding, restore identity/history, captured TT deletion`);
+  }
   for (const tt of [false,true]) {
     const p=await start(tt); await open(p);await add(p,'好友甲');await save(p);await b(p,'取消').click();await add(p,'好友乙');await save(p);await b(p,'取消').click();
-    const before=(await books(p,tt))[0];await backContacts(p);await b(p,'打开聊天：好友甲').click();
+    const before=(await books(p,tt))[0];await backContacts(p);await chat(p,'好友甲');
     const composerBounds=await p.locator('.text-composer').boundingBox(), homeBounds=await b(p,'返回手机桌面').boundingBox();
     assert(homeBounds.y-composerBounds.y-composerBounds.height<=3,'composer is close to the home indicator');
     if (tt) {
@@ -95,7 +137,7 @@ try {
       await sendText(p,'键盘内可发送');assert.equal(await bubbles(p).count(),1);
       // Restore this fixture's empty history so the existing persistence assertions remain unchanged.
       await p.evaluate(()=>{const data=ttMock.data();for(const key of Object.keys(data))if(key.includes('/messages-v1-'))delete data[key];localStorage.setItem('fixture.tt.store',JSON.stringify(data));});
-      await p.reload();await open(p);await b(p,'打开聊天：好友甲').click();
+      await p.reload();await open(p);await chat(p,'好友甲');
       await p.evaluate(()=>ttMock.emitLayout({version:1,safeFrame:{left:0,top:24,width:375,height:620},ime:{keyboardOffset:0}}));
       passed.push('TT layout mock: reduced/panned iOS frame and Android keyboard inset keep multiline input/send visible; collapse retains draft; send works');
     }
@@ -107,38 +149,38 @@ try {
     await sendText(p,content);assert.equal(await bubbles(p).last().textContent(),content);assert.equal(await p.locator('.real-messages img[src=x]').count(),0);
     assert.equal(await p.locator('.sp-message-sender-cv2').count(),0);
     const avatarBounds=await p.locator('.real-messages .avatar').last().boundingBox(), bubbleBounds=await bubbles(p).last().boundingBox();
-    assert.equal(Math.round(avatarBounds.width),40);assert(Math.abs(avatarBounds.y-bubbleBounds.y)<1,'avatar and bubble align at top');
+    assert.equal(Math.round(avatarBounds.width),34);assert(Math.abs(bubbleBounds.y-avatarBounds.y-4)<1,'bubble starts 4px below avatar');
     await b(p,'返回').click();await b(p,'消息').click();assert((await p.locator('.message-summary').first().textContent()).includes('你好 多行'));assert.equal(await p.locator('.unread').count(),0);
-    await b(p,'打开聊天：好友乙').click();assert.equal(await bubbles(p).count(),0);await sendText(p,'相同文字');await sendText(p,'相同文字');assert.equal(await bubbles(p).count(),2);
+    await chat(p,'好友乙');assert.equal(await bubbles(p).count(),0);await sendText(p,'相同文字');await sendText(p,'相同文字');assert.equal(await bubbles(p).count(),2);
     await b(p,'返回').click();await b(p,'消息').click();assert.equal(await p.locator('.contact-row').first().getAttribute('aria-label'),'打开聊天：好友乙');
-    await b(p,'打开聊天：好友甲').click();await textBox(p).fill('甲未发草稿');await b(p,'返回').click();await b(p,'打开聊天：好友乙').click();assert.equal(await textBox(p).inputValue(),'');
+    await chat(p,'好友甲');await textBox(p).fill('甲未发草稿');await b(p,'返回').click();await chat(p,'好友乙');assert.equal(await textBox(p).inputValue(),'');
     await textBox(p).fill('乙未发草稿');await b(p,'收起手机').click();await b(p,'打开灰玻璃小手机').click();assert.equal(await textBox(p).inputValue(),'乙未发草稿');await textBox(p).fill('');
-    await b(p,'返回').click();await b(p,'打开聊天：好友甲').click();assert.equal(await textBox(p).inputValue(),'甲未发草稿');await textBox(p).fill('');
+    await b(p,'返回').click();await chat(p,'好友甲');assert.equal(await textBox(p).inputValue(),'甲未发草稿');await textBox(p).fill('');
     await b(p,'聊天资料').click();await p.getByLabel('手机备注',{exact:true}).fill('甲备注');await b(p,'恢复默认头像').click();
     await p.getByLabel('开局关系',{exact:true}).selectOption('stranger');await save(p);
     await p.getByLabel('开局关系',{exact:true}).selectOption('friend');await save(p);await b(p,'取消').click();assert.equal(await bubbles(p).count(),1);
     await sendText(p,'资料修改后发送');const profile=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0];
     assert.equal(profile.people[0].remark,'甲备注');assert.equal(profile.id,before.id);assert.equal(profile.self.account,before.self.account);
     assert.equal(profile.people.length,2);assert.equal(profile.people[0].id,before.people[0].id);assert.equal(profile.people[0].account,before.people[0].account);
-    await p.reload();await open(p);await b(p,'打开聊天：甲备注').click();assert.equal(await bubbles(p).count(),2);
+    await p.reload();await open(p);await chat(p,'甲备注');assert.equal(await bubbles(p).count(),2);
     await textBox(p).fill('字'.repeat(10001));assert(await b(p,'发送').isDisabled());assert((await p.locator('.message-feedback').textContent()).includes('10000'));await textBox(p).fill('  \n ');assert(await b(p,'发送').isDisabled());await textBox(p).fill('');
     await sendText(p,'长'.repeat(10000));assert.equal((await bubbles(p).last().textContent()).length,10000);
-    await p.evaluate(()=>profileMock.switch('0','chat-B','integrity-A'));await until(()=>b(p,'登记人物').count(),'B');await add(p,'B人物','friend',false);await save(p);await b(p,'取消').click();await backContacts(p);await b(p,'打开聊天：B人物').click();assert.equal(await bubbles(p).count(),0);await sendText(p,'B独有');
+    await p.evaluate(()=>profileMock.switch('0','chat-B','integrity-A'));await until(()=>b(p,'登记人物').count(),'B');await add(p,'B人物','friend',false);await save(p);await b(p,'取消').click();await backContacts(p);await chat(p,'B人物');assert.equal(await bubbles(p).count(),0);await sendText(p,'B独有');
     await p.evaluate(()=>profileMock.switch('1','chat-A','integrity-A'));await until(()=>b(p,'登记人物').count(),'other card');assert.equal(await p.locator('.contact-row').count(),0);
-    await p.evaluate(()=>profileMock.switch('0','chat-A','integrity-A'));await until(()=>b(p,'登记人物').count(),'A');await backContacts(p);await b(p,'打开聊天：甲备注').click();assert.equal(await bubbles(p).count(),3);
+    await p.evaluate(()=>profileMock.switch('0','chat-A','integrity-A'));await until(()=>b(p,'登记人物').count(),'A');await backContacts(p);await chat(p,'甲备注');assert.equal(await bubbles(p).count(),3);
     const stable=await histories(p,tt);await b(p,'返回手机桌面').click();await b(p,'打开设置').click();await b(p,'独立样式演示').click();await p.locator('[data-chat=rain]').click();await b(p,'发送消息（预览）').click();assert.deepEqual(await histories(p,tt),stable);
     assert.deepEqual(p.errors,[]);await p.close();passed.push(`${tt?'TT':'ST'}: text/newline/IME/emoji/HTML, persistence, summaries/order, two friends, three archive scopes, profile preservation, drafts, length, demo isolation`);
   }
-  const p=await start(true);await open(p);await add(p,'异步好友');await save(p);await b(p,'取消').click();await add(p,'另一好友');await save(p);await b(p,'取消').click();await backContacts(p);await b(p,'打开聊天：异步好友').click();
+  const p=await start(true);await open(p);await add(p,'异步好友');await save(p);await b(p,'取消').click();await add(p,'另一好友');await save(p);await b(p,'取消').click();await backContacts(p);await chat(p,'异步好友');
   await p.evaluate(()=>{ttMock.waitMessage=true;delete ttMock.releasewaitMessage;});await textBox(p).fill('点击两次');await b(p,'发送').evaluate(node=>{node.click();node.click();});await p.waitForFunction(()=>ttMock.releasewaitMessage);await textBox(p).fill('随后输入');
   await p.evaluate(()=>{ttMock.waitMessage=false;ttMock.releasewaitMessage();});await until(async()=>!(await p.locator('.pending-message').count()),'confirmed');assert.equal(await textBox(p).inputValue(),'随后输入');assert.equal((await histories(p,true))[0].messages.length,1);
   await p.evaluate(()=>ttMock.messageFailAfterWrite=true);await b(p,'发送').click();await until(()=>b(p,'核对并重试').count(),'unknown outcome');const messageId=await p.locator('.pending-message').getAttribute('data-message-id');const writes=await p.evaluate(()=>ttMock.calls.filter(c=>c.key.startsWith('messages-')).length);
   await b(p,'核对并重试').click();await until(async()=> (await textBox(p).inputValue())==='', 'retry confirmed');assert.equal(await p.evaluate(()=>ttMock.calls.filter(c=>c.key.startsWith('messages-')).length),writes);assert.equal((await histories(p,true))[0].messages.at(-1).messageId,messageId);
-  await p.evaluate(()=>{ttMock.waitMessage=true;delete ttMock.releasewaitMessage;});await textBox(p).fill('迟到旧会话');await b(p,'发送').click();await p.waitForFunction(()=>ttMock.releasewaitMessage);await b(p,'返回').click();await b(p,'打开聊天：另一好友').click();await textBox(p).fill('新会话草稿');await p.evaluate(()=>{ttMock.waitMessage=false;ttMock.releasewaitMessage();});await p.waitForTimeout(50);assert.equal(await textBox(p).inputValue(),'新会话草稿');assert.equal(await bubbles(p).count(),0);
-  await textBox(p).fill('');await b(p,'返回').click();await b(p,'打开聊天：异步好友').click();await p.evaluate(()=>{ttMock.waitMessage=true;delete ttMock.releasewaitMessage;});await textBox(p).fill('原存档在途');await b(p,'发送').click();await p.waitForFunction(()=>ttMock.releasewaitMessage);
+  await p.evaluate(()=>{ttMock.waitMessage=true;delete ttMock.releasewaitMessage;});await textBox(p).fill('迟到旧会话');await b(p,'发送').click();await p.waitForFunction(()=>ttMock.releasewaitMessage);await b(p,'返回').click();await chat(p,'另一好友');await textBox(p).fill('新会话草稿');await p.evaluate(()=>{ttMock.waitMessage=false;ttMock.releasewaitMessage();});await p.waitForTimeout(50);assert.equal(await textBox(p).inputValue(),'新会话草稿');assert.equal(await bubbles(p).count(),0);
+  await textBox(p).fill('');await b(p,'返回').click();await chat(p,'异步好友');await p.evaluate(()=>{ttMock.waitMessage=true;delete ttMock.releasewaitMessage;});await textBox(p).fill('原存档在途');await b(p,'发送').click();await p.waitForFunction(()=>ttMock.releasewaitMessage);
   await p.evaluate(()=>profileMock.switch('0','B'));await until(()=>b(p,'登记人物').count(),'switch writing');await p.evaluate(()=>{ttMock.waitMessage=false;ttMock.releasewaitMessage();});await p.waitForTimeout(50);assert.equal(await p.locator('.contact-row').count(),0);
   assert((await histories(p,true))[0].messages.some(m=>m.text==='原存档在途'));assert.deepEqual(p.errors,[]);await p.close();passed.push('TT: double click, later typing retained, unknown confirmation ID retry, contact/archive switch during write');
-  const f=await start();await open(f);await add(f,'失败好友');await save(f);await b(f,'取消').click();await backContacts(f);await b(f,'打开聊天：失败好友').click();
+  const f=await start();await open(f);await add(f,'失败好友');await save(f);await b(f,'取消').click();await backContacts(f);await chat(f,'失败好友');
   await f.evaluate(()=>{window.realSet=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('yui-glass-phone.messages'))throw Error('quota');return realSet.call(this,k,v);};});
   await textBox(f).fill('保留原文');await b(f,'发送').click();await until(()=>b(f,'核对并重试').count(),'failed');const failedId=await f.locator('.pending-message').getAttribute('data-message-id');assert.equal(await textBox(f).inputValue(),'保留原文');assert.equal((await histories(f,false)).length,0);
   await f.evaluate(()=>Storage.prototype.setItem=realSet);await b(f,'核对并重试').click();await until(async()=> (await textBox(f).inputValue())==='', 'retry');assert.equal((await histories(f,false))[0].messages[0].messageId,failedId);
@@ -146,10 +188,10 @@ try {
   await textBox(f).fill('保护草稿');
   assert(await f.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}));
   await b(f,'返回').click();assert(await f.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}));
-  await b(f,'打开聊天：失败好友').click();await textBox(f).fill('');
+  await chat(f,'失败好友');await textBox(f).fill('');
   const other=await f.context().newPage();other.setDefaultTimeout(5000);
   await other.addInitScript({content:await readFile(path.join(root,'tests/profile-mock.js'),'utf8')});await other.route('**/api/users/me',r=>r.fulfill({json:{handle:'test-user'}}));await other.route('**/thumbnail?**',r=>r.fulfill({contentType:'image/png',body:png}));
-  await other.goto(base+'/preview.html');await open(other);await b(other,'打开聊天：失败好友').click();
+  await other.goto(base+'/preview.html');await open(other);await chat(other,'失败好友');
   await sendText(f,'先写入的新消息');await textBox(other).fill('过时窗口的消息');await b(other,'发送').click();await until(()=>b(other,'核对并重试').count(),'stale window conflict');
   assert.equal((await histories(f,false))[0].messages.length,2);assert((await other.locator('.message-pending-status').textContent()).includes('其他窗口'));
   const retryId=await other.locator('.pending-message').getAttribute('data-message-id');await b(other,'重新读取消息').click();await until(async()=> (await bubbles(other).count())===3,'read current records');await b(other,'核对并重试').click();await until(async()=> (await textBox(other).inputValue())==='','rebased retry');

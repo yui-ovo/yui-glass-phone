@@ -27,7 +27,7 @@ export function createMessageStore(win, profiles, session, signal) {
         if (!sameJson(existing, message)) throw Error('相同消息 ID 的内容不一致，未写入');
         return previous; // A previous native write succeeded even if confirmation failed.
       }
-      if (!fresh.book.people.some(p => p.id === message.recipient.id && p.relation.friend)) throw Error('对方已不在本存档好友中，未写入消息');
+      if (!fresh.book.people.some(p => p.id === message.recipient.id && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
       const next = appendMessage(previous, message, expectedRevision);
       guard();
       // Recheck immediately before dispatch. Web Locks serialize cooperating windows.
