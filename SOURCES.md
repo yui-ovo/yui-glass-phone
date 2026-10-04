@@ -71,3 +71,8 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 - [ST toShallow](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/src/endpoints/characters.js)：精简角色同样保留 data.extensions.world，默认空字符串。
 
 本项目只读取已有元数据，不调用这些服务端或原生私有实现；字段缺失时继续返回未知。
+
+
+## 0.9.2 旧版面板样式移植
+
+按用户明确要求移植其 yui-ovo/yui-sillyphone/phone-ui.html 的 sticker-panel、header、tabs、filter、grid、upload-zone 表情包样式与四页签结构（此前核实基线 ef39b16362b70fea18eb6a1d0fe333659b72d9ac）。增加本项目附件作用域，调整宽度/页签间距/最大高度以适配现手机。原 sendTransfer 使用浏览器 prompt，没有独立 CSS；新弹窗保留现有安全金额校验与业务逻辑。未引入旧 AI 识图接口、全局脚本、同层存储或其他作者实现。此节是本次用户授权的 UI 复用记录，先前版本未复用 UI 的历史说明只适用于对应版本。
