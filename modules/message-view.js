@@ -1,5 +1,7 @@
 import { forPerson, MAX_TEXT, quotedMessage, conversationId } from './messages.js';
 import { createMessageActions } from './message-actions.js';
+import { createAttachments } from './attachment-view.js';
+import { kindOf, summary, money, transferState } from './rich-messages.js';
 
 // Gray glass cv2 markup comes from the user's original regex/chat skin.
 // Every name and message is a text node, never executable regex output/HTML.
@@ -12,7 +14,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   input.title = `每条最多 ${MAX_TEXT} 个字符；Enter 换行，点击飞机发送。消息保存在本机`;
   const count = el('span', 'message-count');
   let composing = false, active = true;
-  const extra = button('', () => { feedback.textContent = '目前支持文字消息，附件还未接入'; }, 'composer-button');
+  const extra = button('', () => attachments.open(), 'composer-button');
   extra.setAttribute('aria-label', '添加附件');
   extra.append(el('span', 'sp-fake-input-left-cv2'));
   const send = button('', () => {
@@ -57,11 +59,20 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     const row = el('div', 'sp-message-cv2' + suffix), main = el('div', 'sp-message-main-cv2' + suffix);
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
     const line = el('div', 'sp-message-row-cv2' + suffix), text = el('div', 'sp-message-bubble-cv2' + suffix, message.text);
+    if (kindOf(message) === 'sticker') {
+      text.classList.add('sticker-bubble'); text.replaceChildren();
+      const img = el('img', 'message-sticker'); img.alt = message.sticker.description; img.loading = 'lazy'; text.append(img);
+      const fallback = el('span','sticker-missing',message.sticker.description);text.append(fallback);
+      messenger.library().get(message.sticker.assetId).then(asset=>{if(!active||!img.isConnected)return;if(asset){img.onload=()=>fallback.remove();img.onerror=()=>{img.remove();fallback.textContent='图片无法显示 · '+message.sticker.description;};img.src=asset.data;}else{img.remove();fallback.textContent='本机缺少图片 · '+message.sticker.description;}}).catch(()=>{if(active&&img.isConnected){img.remove();fallback.textContent='图片暂不可读取 · '+message.sticker.description;}});
+    } else if (kindOf(message) === 'transfer') {
+      text.classList.add('transfer-bubble');text.replaceChildren(el('span','transfer-caption','转账'),el('strong','transfer-amount',`¥${money(message.transfer.amountMinor)}`),el('span','transfer-note',message.transfer.note),el('span','transfer-state',transferState(message.transfer.state)));
+      if(!pending){text.setAttribute('role','button');text.setAttribute('aria-label',`转账详情：${money(message.transfer.amountMinor)}元，${transferState(message.transfer.state)}`);text.addEventListener('click',()=>{if(actions.canTap())attachments.inspectTransfer(message.messageId);});text.addEventListener('keydown',e=>{if(e.key==='Enter'&&actions.canTap()){e.preventDefault();attachments.inspectTransfer(message.messageId);}});}
+    }
     if (!pending) { text.tabIndex = 0; text.title = '长按或右键打开消息菜单'; }
     line.append(text); main.append(line);
     if (message.replyTo) {
       const original = quotedMessage(messenger.history(), message);
-      const quote = el('div', 'message-quote', original ? `${original.sender.kind === 'self' ? self.name : person.name}：${original.text}` : '原消息已删除');
+      const quote = el('div', 'message-quote', original ? `${original.sender.kind === 'self' ? self.name : person.name}：${summary(original)}` : '原消息已删除');
       quote.title = quote.textContent; quote.setAttribute('aria-label', `引用：${quote.textContent}`);
       main.append(quote);
     }
@@ -75,7 +86,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     if (!active) return;
     const history = messenger.history(), state = messenger.draft(person.id), status = messenger.status();
     const nearEnd = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60, previousTop = scroll.scrollTop;
-    actions.paint();
+    actions.paint(); attachments.paint();
     scroll.replaceChildren();
     if (history) {
       const messages = forPerson(history, person.id);
@@ -87,7 +98,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     }
     const op = state.operation;
     if (op) {
-      if (!history?.messages.some(m => m.messageId === op.message.messageId)) scroll.append(bubble(op.message, true));
+      for (const message of op.delivery?.messages || [op.message]) if (message && !history?.messages.some(m => m.messageId === message.messageId)) scroll.append(bubble(message, true));
       const panel = el('div', 'message-pending-status'); panel.append(el('p', 'profile-help', op.busy ? '正在保存…' : op.error));
       if (!op.busy) panel.append(button('核对并重试', () => { void messenger.retry(person.id); }), button('重新读取消息', () => { void messenger.refresh(); }), button('结束消息核对', () => {
         if (wrap.ownerDocument.defaultView.confirm('停止重试并重新读取？当前输入会保留，未保存的 AI 回复会被放弃，已经保存的消息不会删除。')) void messenger.endSend(person.id);
@@ -106,6 +117,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = nearEnd ? scroll.scrollHeight : previousTop; });
   }
   const actions = createMessageActions({wrap, scroll, person, messenger, el, button, repaint: paint});
+  const attachments = createAttachments({wrap, person, messenger, el, button});
   const unsubscribe = messenger.subscribe(paint); paint();
-  return () => { active = false; observer.disconnect(); unsubscribe(); actions.dispose(); messenger.cancelReply(person.id); onReplyState?.(); };
+  return () => { active = false; observer.disconnect(); unsubscribe(); actions.dispose(); attachments.dispose(); messenger.cancelReply(person.id); onReplyState?.(); };
 }

@@ -1,6 +1,6 @@
 import { ttStore, ttHost } from './host.js';
 import { clone, sameJson } from './contacts.js';
-import { newHistory, validateHistory, appendMessage, messagePersonId, applyChange, changeFingerprint } from './messages.js';
+import { newHistory, validateHistory, appendMessage, messagePersonId, applyChange, changeFingerprint, applyDelivery } from './messages.js';
 export const messageKey = (account, archiveId) => `yui-glass-phone.messages.v1:${encodeURIComponent(account)}:${encodeURIComponent(archiveId)}`;
 export function createMessageStore(win, profiles, session, signal) {
   const archiveId = session.book.id, key = messageKey(session.account, archiveId);
@@ -40,5 +40,6 @@ export function createMessageStore(win, profiles, session, signal) {
   }
   return { read, send: (message, expectedRevision) => commit(messagePersonId(message), previous => appendMessage(previous, message, expectedRevision)),
     async change(operation) { const fingerprint = await changeFingerprint(operation); guard(); return commit(operation.personId, previous => applyChange(previous, operation, fingerprint)); },
+    async deliver(operation) { const fingerprint = await changeFingerprint(operation); guard(); return commit(operation.personId, previous => applyDelivery(previous, operation, fingerprint)); },
   };
 }

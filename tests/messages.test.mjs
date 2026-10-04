@@ -27,7 +27,7 @@ test('normalized messages: identity, deterministic order, same text is legal twi
   assert.notEqual(a.messageId,b.messageId);assert.equal(forPerson(history,'friend').length,2);assert.equal(forPerson(history,'other').length,0);
   assert.deepEqual(appendMessage(history,a,0),history);assert.throws(()=>appendMessage(history,{...a,text:'different'},2));
   assert.throws(()=>createMessage('book','p','  \n ',1));assert.throws(()=>createMessage('book','p','字'.repeat(MAX_TEXT+1),1));
-  assert.throws(()=>validateHistory({...history,version:3},'book'));assert.throws(()=>validateHistory(history,'wrong'));
+  assert.throws(()=>validateHistory({...history,version:99},'book'));assert.throws(()=>validateHistory(history,'wrong'));
 });
 for(const tt of [false,true])test(`${tt?'TT':'ST'} independent message storage, profile preservation, conflict and friend recheck`,async()=>{
   const f=fixture(tt); const before=clone(f.book),a=createMessage(f.book.id,f.friend.id,'消息',1);

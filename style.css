@@ -1063,3 +1063,36 @@ h1, h2, p { margin: 0; }
 .worldbook-entry summary { min-height:24px; padding:3px 0; font-size:11px; line-height:1.6; cursor:pointer; overflow-wrap:anywhere; }
 .worldbook-entry .profile-material { margin:8px 0 0; max-height:240px; overflow-y:auto; }
 .worldbook-saved { margin-top:14px; }
+
+/* Phone attachments keep the same glass surfaces and remain inside the shell. */
+.attachment-panel { position:absolute; z-index:9; left:12px; right:12px; bottom:45px; max-height:calc(100% - 60px); display:flex; flex-direction:column; padding:12px; border:1px solid #ffffff22; border-radius:18px; background:linear-gradient(140deg,#393941fa,#25252dfa); box-shadow:0 8px 30px #0005; }
+.attachment-panel[hidden] { display:none; }
+.attachment-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-shrink:0; font-size:13px; }
+.attachment-close { width:32px; height:32px; font-size:20px; }
+.attachment-body { overflow-y:auto; overscroll-behavior:contain; min-height:0; padding:4px 1px; }
+.attachment-panel .profile-status { flex-shrink:0; max-height:48px; overflow-y:auto; font-size:11px; margin:5px 0 0; }
+.attachment-panel .profile-status:empty { display:none; }
+.attachment-panel .profile-label { font-size:11px; margin:8px 0; }
+.attachment-panel input:not([type=checkbox]), .attachment-panel textarea, .attachment-panel select { width:100%; min-height:34px; padding:7px; border:1px solid #ffffff1c; border-radius:9px; color:#edeaf1; background:#ffffff06; font:inherit; font-size:16px; }
+.attachment-panel select { background:#34343c; }
+.attachment-panel .profile-action { margin:6px 0; min-height:36px; font-size:12px; padding:8px; }
+.sticker-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.sticker-tile { min-width:0; }
+.sticker-send { display:flex; flex-direction:column; align-items:center; width:100%; padding:3px; gap:5px; }
+.sticker-send img { width:100%; height:68px; object-fit:contain; border-radius:5px; }
+.sticker-send span { display:block; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:#c5c1ce; }
+.sticker-options { font-size:10px; color:#bdb8c9; }
+.sticker-options summary { text-align:center; cursor:pointer; padding:6px; }
+.sticker-options[open] { grid-column:1 / -1; }
+.sticker-tile:has(.sticker-options[open]) { grid-column:1 / -1; }
+.sticker-options .profile-check { font-size:11px; }
+.real-messages .sp-message-bubble-cv2.sticker-bubble { background:transparent; border:0; box-shadow:none; padding:0; min-width:64px; }
+.message-sticker { display:block; width:112px; height:112px; max-width:100%; object-fit:contain; border-radius:7px; }
+.sticker-missing { font-size:11px; color:#bfb9ca; }
+.transfer-bubble { min-width:150px; display:flex; flex-direction:column; gap:6px; cursor:pointer; background:linear-gradient(135deg,#77758133,#ffffff08)!important; }
+.transfer-caption { font-size:10px; color:#c5bdcf; }
+.transfer-amount { display:block; font-size:21px; font-weight:500; letter-spacing:.3px; }
+.transfer-note { font-size:11px; overflow-wrap:anywhere; }
+.transfer-note:empty { display:none; }
+.transfer-state { font-size:10px; color:#c8c3cf; border-top:1px solid #ffffff15; padding-top:6px; }
+.message-action-card[data-kind="menu"]:has(.message-menu-action:nth-child(4):last-of-type) { grid-template-columns:repeat(4,minmax(0,1fr)); }

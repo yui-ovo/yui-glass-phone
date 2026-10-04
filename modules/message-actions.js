@@ -1,4 +1,5 @@
 import { conversationId } from './messages.js';
+import { kindOf } from './rich-messages.js';
 
 const menuIcons = {
   '复制': 'M8 8h12v13H8z M16 8V3H3v13h5',
@@ -66,6 +67,7 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     action('引用', () => attempt(() => { closeMenu(); messenger.quote(person.id, id); wrap.querySelector('.text-composer textarea')?.focus(); }, status)),
     action('删除', () => confirmDelete([id])),
     action('多选', () => { closeMenu(); suppressUntil = 0; selecting = true; selected = new Set([id]); repaint(); }), status);
+    if (kindOf(currentMessage(id)) !== 'text') [...box.querySelectorAll('button')].find(b => b.textContent === '编辑')?.remove();
     placeMenu();
   }
   function decorate(row, message) {
@@ -121,5 +123,5 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     if (event.key === 'Escape' && !layer.hidden) { event.preventDefault(); event.stopPropagation(); if (panelKind === 'edit') { messenger.cancelEdit(person.id); } else closeMenu(); }
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { const row = event.target.closest('[data-message-id]'); if (row) { event.preventDefault(); openMenu(row.dataset.messageId); } }
   }, { signal: life.signal });
-  return { decorate, paint, dispose() { stopPress(); life.abort(); layer.remove(); bar.remove(); } };
+  return { decorate, paint, canTap: () => !selecting && Date.now() >= suppressUntil && layer.hidden, dispose() { stopPress(); life.abort(); layer.remove(); bar.remove(); } };
 }

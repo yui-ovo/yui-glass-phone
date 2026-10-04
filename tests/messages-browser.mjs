@@ -108,7 +108,7 @@ try {
     if (tt) {
       assert.equal(await textBox(p).getAttribute('placeholder'),'⟡小如思念送達中······ ♡⟡');
       assert.equal(Math.round((await p.locator('.text-composer').boundingBox()).height),34);
-      await b(p,'添加附件').click();assert((await p.locator('.message-feedback').textContent()).includes('附件还未接入'));
+      await b(p,'添加附件').click();assert(await b(p,'表情包').isVisible());assert(await b(p,'转账').isVisible());await b(p,'关闭附件面板').click();
       for (const frame of [
         {version:1,safeFrame:{left:0,top:80,width:393,height:300},ime:{keyboardOffset:0}},
         {version:1,safeFrame:{left:0,top:120,width:393,height:240},ime:{keyboardOffset:0}},
