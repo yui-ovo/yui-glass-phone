@@ -1,10 +1,11 @@
-import { forPerson, MAX_TEXT } from './messages.js';
+import { forPerson, MAX_TEXT, quotedMessage, conversationId } from './messages.js';
+import { createMessageActions } from './message-actions.js';
 
 // Gray glass cv2 markup comes from the user's original regex/chat skin.
 // Every name and message is a text node, never executable regex output/HTML.
-export function mountConversation({ wrap, scroll, person, self, messenger, el, button, avatar, icon }) {
+export function mountConversation({ wrap, scroll, person, self, messenger, el, button, avatar, icon, onReplyState }) {
   scroll.classList.add('chat-scroll', 'real-messages');
-  const hint = el('p', 'message-local-note', '有字发送 · 空白时点飞机让对方回复');
+  const quoteDraft = el('div', 'message-quote-preview'); quoteDraft.hidden = true;
   const feedback = el('p', 'message-feedback'); feedback.setAttribute('role', 'status');
   const composer = el('div', 'composer text-composer'), input = el('textarea'); input.rows = 1;
   input.placeholder = '⟡小如思念送達中······ ♡⟡'; input.setAttribute('aria-label', '消息输入框');
@@ -35,12 +36,11 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     const state = messenger.draft(person.id), size = [...state.text].length;
     const status = messenger.status();
     const generating = status.generating === person.id;
-    send.disabled = !generating && (composing || size > MAX_TEXT || !!state.operation || !messenger.history() || status.reading || !!status.generating);
+    send.disabled = !generating && (composing || size > MAX_TEXT || !!state.operation || !!status.change || !!state.editing || !messenger.history() || status.reading || !!status.generating);
     const label = generating ? '停止回复' : state.text.trim() ? '发送' : '让对方回复';
     send.innerHTML = icon(generating ? 'stop' : 'send');
     send.setAttribute('aria-label', label); send.title = label; send.classList.toggle('is-generating', generating);
-    if (generating) feedback.textContent = '正在请求回复…';
-    else if (state.aiError) feedback.textContent = state.aiError;
+    onReplyState?.(generating ? () => messenger.cancelReply(person.id) : undefined, state.aiError);
     count.textContent = `${size} / ${MAX_TEXT}`;
     count.hidden = size < MAX_TEXT * .9 || size > MAX_TEXT;
     if (size > MAX_TEXT) feedback.textContent = `每条消息最多 ${MAX_TEXT} 个字符，请缩短后发送`;
@@ -50,22 +50,31 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   input.addEventListener('compositionstart', () => { composing = true; messenger.input(person.id, input.value); controls(); });
   input.addEventListener('compositionend', () => { composing = false; messenger.input(person.id, input.value); controls(); });
   // No Enter handler: native textarea behavior preserves newline/IME composition.
-  composer.append(extra, input, send); wrap.append(hint, count, feedback, composer);
+  composer.append(extra, input, send); wrap.append(quoteDraft, count, feedback, composer);
   const observer = new ResizeObserver(resizeInput); observer.observe(wrap);
   function bubble(message, pending) {
     const outgoing = message.sender.kind === 'self', suffix = outgoing ? ' self' : '';
     const row = el('div', 'sp-message-cv2' + suffix), main = el('div', 'sp-message-main-cv2' + suffix);
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
     const line = el('div', 'sp-message-row-cv2' + suffix), text = el('div', 'sp-message-bubble-cv2' + suffix, message.text);
+    if (!pending) { text.tabIndex = 0; text.title = '长按或右键打开消息菜单'; }
+    if (message.replyTo) {
+      const original = quotedMessage(messenger.history(), message);
+      const quote = el('span', 'message-quote', original ? `${original.sender.kind === 'self' ? self.name : person.name}：${original.text}` : '原消息已删除');
+      text.prepend(quote);
+    }
     line.append(text); main.append(line);
     row.setAttribute('aria-label', outgoing ? `我方消息，${self.name}` : `AI 回复，${person.name}`);
     const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
     time.title = '设备记录时间，不代表剧情时间'; time.dateTime = message.createdAt; main.append(time);
-    if (outgoing) row.append(main, avatar(self)); else row.append(avatar(person), main); return row;
+    if (outgoing) row.append(main, avatar(self)); else row.append(avatar(person), main);
+    if (!pending) actions.decorate(row, message); return row;
   }
   function paint() {
     if (!active) return;
     const history = messenger.history(), state = messenger.draft(person.id), status = messenger.status();
+    const nearEnd = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60, previousTop = scroll.scrollTop;
+    actions.paint();
     scroll.replaceChildren();
     if (history) {
       const messages = forPerson(history, person.id);
@@ -79,14 +88,23 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     if (op) {
       if (!history?.messages.some(m => m.messageId === op.message.messageId)) scroll.append(bubble(op.message, true));
       const panel = el('div', 'message-pending-status'); panel.append(el('p', 'profile-help', op.busy ? '正在保存…' : op.error));
-      if (!op.busy) panel.append(button('核对并重试', () => { void messenger.retry(person.id); }), button('重新读取消息', () => { void messenger.refresh(); }));
+      if (!op.busy) panel.append(button('核对并重试', () => { void messenger.retry(person.id); }), button('重新读取消息', () => { void messenger.refresh(); }), button('结束消息核对', () => {
+        if (wrap.ownerDocument.defaultView.confirm('停止重试并重新读取？当前输入会保留，未保存的 AI 回复会被放弃，已经保存的消息不会删除。')) void messenger.endSend(person.id);
+      }));
       scroll.append(panel);
     }
     // Version counter in the controller decides whether submitted input may be cleared.
     if (input.value !== state.text) input.value = state.text;
-    feedback.textContent = ''; controls(); scroll.scrollTop = scroll.scrollHeight;
-    queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = scroll.scrollHeight; });
+    quoteDraft.replaceChildren(); quoteDraft.hidden = !state.quoteId;
+    if (state.quoteId) {
+      const original = history?.messages.find(m => m.messageId === state.quoteId && m.conversationId === conversationId(person.id));
+      const cancel = button('×', () => messenger.quote(person.id, undefined), 'quote-cancel'); cancel.setAttribute('aria-label', '取消引用');
+      quoteDraft.append(el('span', '', original ? `引用：${original.text}` : '引用：原消息已删除'), cancel);
+    }
+    feedback.textContent = ''; controls(); scroll.scrollTop = nearEnd ? scroll.scrollHeight : previousTop;
+    queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = nearEnd ? scroll.scrollHeight : previousTop; });
   }
+  const actions = createMessageActions({wrap, scroll, person, messenger, el, button, repaint: paint});
   const unsubscribe = messenger.subscribe(paint); paint();
-  return () => { active = false; observer.disconnect(); unsubscribe(); messenger.cancelReply(person.id); };
+  return () => { active = false; observer.disconnect(); unsubscribe(); actions.dispose(); messenger.cancelReply(person.id); onReplyState?.(); };
 }

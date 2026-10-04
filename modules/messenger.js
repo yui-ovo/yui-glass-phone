@@ -1,14 +1,14 @@
 import { createMessageStore } from './message-host.js';
-import { createMessage, createReply } from './messages.js';
+import { createMessage, createReply, createChange, conversationId } from './messages.js';
 import { sameJson } from './contacts.js';
 import { readConfig, replyContext, buildPrompt, apiRequest } from './ai.js';
 
 // In-memory drafts are scoped to the active archive; only confirmed records enter history.
 export function createMessenger(win, profiles) {
-  let epoch = 0, store, history, error = '', reading = false, session, sessionSignal, job;
+  let epoch = 0, store, history, error = '', reading = false, session, sessionSignal, job, change;
   const drafts = new Map(), listeners = new Set();
   const emit = () => { for (const fn of [...listeners]) fn(); };
-  const draft = id => { if (!drafts.has(id)) drafts.set(id, { text: '', edit: 0, operation: null, aiError: '', replyAfter: 0 }); return drafts.get(id); };
+  const draft = id => { if (!drafts.has(id)) drafts.set(id, { text: '', edit: 0, operation: null, aiError: '', replyAfter: 0, quoteId: undefined, editing: undefined }); return drafts.get(id); };
   function cancelReply(id) {
     if (job && (!id || job.id === id)) { const cancelled = job; job = undefined; cancelled.controller.abort(); draft(cancelled.id).aiError = '已停止回复'; emit(); }
   }
@@ -35,15 +35,34 @@ export function createMessenger(win, profiles) {
       const saved = await captured.send(op.message, op.revision);
       if (ticket !== epoch) return;
       history = saved;
-      if (op.message.source === 'phone-manual' && state.edit === op.edit) { state.text = ''; state.edit++; }
+      if (op.message.source === 'phone-manual' && state.edit === op.edit) { state.text = ''; state.quoteId = undefined; state.edit++; }
       if (op.message.source === 'phone-manual') state.replyAfter = Date.now() + 800;
       state.operation = null;
     } catch (e) { if (ticket === epoch) op.error = `${e.message || '保存未确认'}。可核对并重试，消息可能已写入。`; }
     finally { if (ticket === epoch) { op.busy = false; emit(); } }
   }
+  function ensureMutable() {
+    if (!history || reading) throw Error('请等待消息读取完成');
+    if (change || [...drafts.values()].some(d => d.operation)) throw Error('请先处理未确认保存的消息或修改');
+  }
+  async function executeChange() {
+    const op = change; if (!op || op.busy) return;
+    const ticket = epoch, captured = store; op.busy = true; op.error = ''; emit();
+    try {
+      const saved = await captured.change(op.value); if (ticket !== epoch || change !== op) return;
+      history = saved; const state = draft(op.value.personId); state.editing = undefined; change = undefined;
+    } catch (e) { if (ticket === epoch && change === op) op.error = `${e.message || '保存未确认'}。修改可能已写入，可核对并重试。`; }
+    finally { if (ticket === epoch) { op.busy = false; emit(); } }
+  }
+  function mutate(id, kind, ids, text, expectedRevision) {
+    ensureMutable(); cancelReply();
+    const value = createChange(history, id, kind, ids, text); if (expectedRevision !== undefined) value.expectedRevision = expectedRevision;
+    change = { value, busy: false, error: '' }; void executeChange();
+  }
   async function requestReply(id) {
     const state = draft(id);
     if (!history || reading || job || state.text.trim() || Date.now() < state.replyAfter) return;
+    if (change || state.editing || state.quoteId) { state.aiError = '请先保存或取消编辑，并处理输入框中的引用'; emit(); return; }
     if ([...drafts.values()].some(d => d.operation)) { state.aiError = '还有未确认保存的消息，请先回到对应会话核对并重试'; emit(); return; }
     const ticket = epoch, captured = session, signal = sessionSignal;
     const controller = new AbortController(), task = { id, controller }; job = task; state.aiError = ''; emit();
@@ -58,7 +77,7 @@ export function createMessenger(win, profiles) {
       if (!person) throw Error('对方不在当前存档好友中');
       const context = replyContext(win, fresh.book, person), initial = await store.read();
       if (!current()) return;
-      const text = await apiRequest(win, config, 'reply', buildPrompt(context, initial, id, config.historyCount), controller.signal);
+      const text = await apiRequest(win, config, 'reply', buildPrompt(context, initial, id, config.historyCount, config.prompt), controller.signal);
       if (!current()) return;
       profiles.assertSession(captured, signal);
       const latest = await profiles.load(signal); if (!current()) return;
@@ -75,22 +94,32 @@ export function createMessenger(win, profiles) {
   }
   return {
     async bind(value, signal) {
-      cancelReply(); epoch++; drafts.clear(); history = undefined; error = ''; reading = false; session = value; sessionSignal = signal;
+      cancelReply(); epoch++; drafts.clear(); change = undefined; history = undefined; error = ''; reading = false; session = value; sessionSignal = signal;
       store = createMessageStore(win, profiles, value, signal); await refresh();
     },
     history: () => history,
-    status: () => ({ error, reading, generating: job?.id }), draft,
+    status: () => ({ error, reading, generating: job?.id, change }), draft,
     requestReply, cancelReply,
+    beginEdit(id, messageId) { ensureMutable(); const m = history.messages.find(m => m.messageId === messageId && m.conversationId === conversationId(id)); if (!m) throw Error('找不到原消息'); cancelReply(); draft(id).editing = { messageId, text: m.text, revision: history.revision }; emit(); },
+    editInput(id, text) { const state = draft(id); if (state.editing && !change) state.editing.text = text; },
+    cancelEdit(id) { if (change) return; draft(id).editing = undefined; emit(); },
+    saveEdit(id) { const value = draft(id).editing; if (value) mutate(id, 'edit', [value.messageId], value.text, value.revision); },
+    deleteMessages: (id, ids) => mutate(id, 'delete', ids),
+    quote(id, messageId) { const state = draft(id); if (messageId && !history?.messages.some(m => m.messageId === messageId && m.conversationId === conversationId(id))) throw Error('找不到引用消息'); state.quoteId = messageId; state.edit++; emit(); },
+    retryChange: executeChange,
+    async endChange() { if (!change || change.busy) return; const ticket = epoch, op = change; await refresh(); if (ticket === epoch && change === op && history) { draft(op.value.personId).editing = undefined; change = undefined; emit(); } },
     input(id, text) { const state = draft(id); state.text = text; state.edit++; },
     submit(id) {
-      const state = draft(id); if (!history || reading || state.operation || job) return;
+      const state = draft(id); if (!history || reading || state.operation || job || change || state.editing) return;
       const message = createMessage(history.archiveId, id, state.text, (history.messages.at(-1)?.sequence || 0) + 1);
+      if (state.quoteId) message.replyTo = state.quoteId;
       state.operation = { message, revision: history.revision, edit: state.edit, busy: false, error: '' };
       void execute(id);
     },
     retry: id => execute(id), refresh: () => refresh(true),
+    async endSend(id) { const state = draft(id), op = state.operation, ticket = epoch; if (!op || op.busy) return; await refresh(); if (ticket === epoch && state.operation === op && history) { state.operation = null; emit(); } },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    dirty: () => !!job || [...drafts.values()].some(d => d.text.length || d.operation),
-    reset() { cancelReply(); epoch++; drafts.clear(); store = undefined; history = undefined; reading = false; error = ''; listeners.clear(); },
+    dirty: () => !!job || !!change || [...drafts.values()].some(d => d.text.length || d.operation || d.editing || d.quoteId),
+    reset() { cancelReply(); epoch++; drafts.clear(); change = undefined; store = undefined; history = undefined; reading = false; error = ''; listeners.clear(); },
   };
 }

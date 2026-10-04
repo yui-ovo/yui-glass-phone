@@ -1,5 +1,5 @@
 import { clone, sameJson, validateMaterials } from './contacts.js';
-import { AI_KEY, defaultConfig, readConfig, saveConfig, apiRequest, currentPersona, materialKey, worldNames, worldEntries, materialSnapshot } from './ai.js';
+import { AI_KEY, DEFAULT_PROMPT, defaultConfig, readConfig, saveConfig, apiRequest, currentPersona, materialKey, worldNames, worldEntries, materialSnapshot } from './ai.js';
 
 export function apiSettings({ win, base, el, button }) {
   const { wrap, scroll } = base('独立 API', 'settings');
@@ -22,6 +22,11 @@ export function apiSettings({ win, base, el, button }) {
   const temperature = field(advanced, '温度', 'temperature', 'number'); temperature.min = '0'; temperature.max = '2'; temperature.step = '0.1';
   const tokens = field(advanced, '输出长度上限', 'maxTokens', 'number'); tokens.min = '64'; tokens.max = '8192';
   const count = field(advanced, '携带最近消息条数', 'historyCount', 'number'); count.min = '1'; count.max = '200'; scroll.append(advanced);
+  const timeout = field(advanced, '等待时间（秒）', 'timeoutSeconds', 'number'); timeout.min = '30'; timeout.max = '600';
+  const promptSection = el('details', 'profile-trace'); promptSection.append(el('summary', '', '手机聊天提示词'), el('p', 'profile-help', '独立用于手机聊天，不读取酒馆正文预设。这里设置通用聊天风格，每个人的习惯仍填在人物的线上人设中。保存 API 设置后生效。'));
+  const label = el('label', 'profile-label', '提示词内容'), prompt = el('textarea'); prompt.rows = 8; prompt.maxLength = 12000; prompt.value = draft.prompt; prompt.setAttribute('aria-label', '提示词内容');
+  prompt.oninput = () => { draft.prompt = prompt.value; status.textContent = '提示词尚未保存'; }; label.append(prompt);
+  promptSection.append(label, button('恢复默认提示词', () => { prompt.value = DEFAULT_PROMPT; draft.prompt = DEFAULT_PROMPT; status.textContent = '默认提示词已填入，保存后生效'; })); scroll.append(promptSection);
   async function run(kind) {
     if (task) return; const controller = new AbortController(); task = controller; status.textContent = kind === 'models' ? '正在读取模型…' : '正在测试连接…';
     try {

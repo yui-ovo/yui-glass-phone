@@ -5,7 +5,7 @@
   "optional": [],
   "js": "index.js",
   "author": "yui-ovo",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "homePage": "https://github.com/yui-ovo/yui-glass-phone",
   "auto_update": false,
   "hooks": {

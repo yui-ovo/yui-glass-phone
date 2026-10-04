@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newBook, newPerson, clone } from '../modules/contacts.js';
-import { createMessage, newHistory, appendMessage, validateHistory, forPerson, MAX_TEXT } from '../modules/messages.js';
+import { createMessage, newHistory, appendMessage, validateHistory, forPerson, MAX_TEXT, createChange, applyChange, changeFingerprint, quotedMessage } from '../modules/messages.js';
 import { createMessageStore, messageKey } from '../modules/message-host.js';
 import { createMessenger } from '../modules/messenger.js';
 import { saveConfig, defaultConfig } from '../modules/ai.js';
@@ -27,7 +27,7 @@ test('normalized messages: identity, deterministic order, same text is legal twi
   assert.notEqual(a.messageId,b.messageId);assert.equal(forPerson(history,'friend').length,2);assert.equal(forPerson(history,'other').length,0);
   assert.deepEqual(appendMessage(history,a,0),history);assert.throws(()=>appendMessage(history,{...a,text:'different'},2));
   assert.throws(()=>createMessage('book','p','  \n ',1));assert.throws(()=>createMessage('book','p','字'.repeat(MAX_TEXT+1),1));
-  assert.throws(()=>validateHistory({...history,version:2},'book'));assert.throws(()=>validateHistory(history,'wrong'));
+  assert.throws(()=>validateHistory({...history,version:3},'book'));assert.throws(()=>validateHistory(history,'wrong'));
 });
 for(const tt of [false,true])test(`${tt?'TT':'ST'} independent message storage, profile preservation, conflict and friend recheck`,async()=>{
   const f=fixture(tt); const before=clone(f.book),a=createMessage(f.book.id,f.friend.id,'消息',1);
@@ -98,4 +98,46 @@ test('AI captured native write finishes in old store and empty-button cooldown p
   m.input(f.friend.id,'发送');m.submit(f.friend.id);await tick();await m.requestReply(f.friend.id);assert.equal(f.calls(),0);
   m.draft(f.friend.id).replyAfter=0;let release;f.state.delay=new Promise(r=>release=r);const pending=m.requestReply(f.friend.id);await tick();m.reset();f.state.active=false;release();await pending;
   const histories=[...f.state.data.values()].filter(v=>v?.messages);assert.equal(histories[0].messages[1].source,'ai-reply');assert.equal(m.history(),undefined);
+});
+test('edit/delete preserve identity, update references, erase actual text, and prevent stale send resurrection',async()=>{
+  const original=createMessage('book','p','OLD_PRIVATE_TEXT',1), quoted=createMessage('book','p','引用的回复',2);quoted.replyTo=original.messageId;
+  let h=appendMessage(appendMessage(newHistory('book'),original,0),quoted,1);
+  const edit=createChange(h,'p','edit',[original.messageId],'更正🙂\n<script>text</script>');h=applyChange(h,edit,await changeFingerprint(edit));
+  assert.equal(h.messages[0].messageId,original.messageId);assert.equal(h.messages[0].sequence,1);assert.equal(quotedMessage(h,quoted).text,edit.text);assert(!JSON.stringify(h).includes('OLD_PRIVATE_TEXT'));
+  const before=clone(h),remove=createChange(h,'p','delete',[original.messageId]);h=applyChange(h,remove,await changeFingerprint(remove));
+  assert.equal(h.version,2);assert.equal(h.messages.length,1);assert.equal(quotedMessage(h,quoted),undefined);assert(!JSON.stringify(h).includes(edit.text));assert(h.deletedMessageIds.includes(original.messageId));
+  assert.throws(()=>appendMessage(h,{...original,sequence:3},h.revision),/已删除/);
+  assert.deepEqual(applyChange(h,remove,await changeFingerprint(remove)),h);
+  const wrong={...remove,ids:[quoted.messageId]};assert.throws(()=>applyChange(h,wrong,'f'.repeat(64)),/ID/);
+  const foreign=createChange(before,'someone-else','delete',[quoted.messageId]);assert.throws(()=>applyChange(before,foreign,'a'.repeat(64)),/不属于/);
+});
+for(const tt of [false,true])test(`${tt?'TT':'ST'} mutations persist independently with conflict checks and ambiguous-result retry`,async()=>{
+  const f=fixture(tt),first=createMessage(f.book.id,f.friend.id,'原消息',1),second=createMessage(f.book.id,f.friend.id,'第二条',2);
+  await f.store.send(first,0);let h=await f.store.send(second,1);const profiles=clone(f.book);
+  const edit=createChange(h,f.friend.id,'edit',[first.messageId],'修改后');
+  if(tt)f.state.loseConfirmation=true;else f.state.fail=true;
+  await assert.rejects(f.store.change(edit));f.state.loseConfirmation=false;f.state.fail=false;
+  h=await f.store.change(edit);assert.equal(h.messages[0].text,'修改后');assert.deepEqual(f.book,profiles);
+  const newer=createChange(h,f.friend.id,'edit',[first.messageId],'较新的内容');h=await f.store.change(newer);
+  assert.equal((await f.store.change(edit)).messages[0].text,'较新的内容');
+  const stale=createChange({...h,revision:1},f.friend.id,'delete',[second.messageId]);await assert.rejects(f.store.change(stale),/已变化/);
+  const remove=createChange(h,f.friend.id,'delete',[first.messageId,second.messageId]);h=await f.store.change(remove);assert.deepEqual(h.messages,[]);assert.equal((await f.store.read()).messages.length,0);assert.deepEqual(f.book,profiles);
+});
+test('edit drafts survive failure, cancel has no write, and reread never silently rebases an edit',async()=>{
+  const f=fixture(),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);m.input(f.friend.id,'原文');m.submit(f.friend.id);await tick();const id=m.history().messages[0].messageId;
+  m.beginEdit(f.friend.id,id);m.editInput(f.friend.id,'取消的内容');assert(m.dirty());m.cancelEdit(f.friend.id);assert.equal((await f.store.read()).messages[0].text,'原文');
+  m.beginEdit(f.friend.id,id);m.editInput(f.friend.id,'新的草稿');f.state.fail=true;m.saveEdit(f.friend.id);await tick();assert(m.status().change.error);assert.equal(m.draft(f.friend.id).editing.text,'新的草稿');f.state.fail=false;await m.retryChange();assert.equal(m.history().messages[0].text,'新的草稿');
+  m.beginEdit(f.friend.id,id);m.editInput(f.friend.id,'过时草稿');await f.store.change(createChange(await f.store.read(),f.friend.id,'edit',[id],'另一窗口修改'));await m.refresh();m.saveEdit(f.friend.id);await tick();assert.match(m.status().change.error,/已变化/);assert.equal((await f.store.read()).messages[0].text,'另一窗口修改');await m.endChange();assert.equal(m.status().change,undefined);
+});
+test('editing cancels AI, quote input survives navigation, deletion in-flight stays in old archive',async()=>{
+  const f=aiFixture(true),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);m.input(f.friend.id,'文字');m.submit(f.friend.id);await tick();const id=m.history().messages[0].messageId;
+  m.draft(f.friend.id).replyAfter=0;f.wait=true;const request=m.requestReply(f.friend.id);await tick();m.beginEdit(f.friend.id,id);f.release();await request;assert.equal(m.history().messages.length,1);m.cancelEdit(f.friend.id);
+  m.quote(f.friend.id,id);assert(m.dirty());m.input(f.friend.id,'带引用');m.submit(f.friend.id);await tick();assert.equal(m.history().messages[1].replyTo,id);assert.equal(m.draft(f.friend.id).quoteId,undefined);
+  let release;f.state.delay=new Promise(r=>release=r);m.deleteMessages(f.friend.id,[id]);await tick();m.reset();f.state.active=false;release();await tick();assert.equal(m.history(),undefined);const saved=[...f.state.data.values()].find(v=>v?.messages);assert.equal(saved.messages.length,1);assert(saved.deletedMessageIds.includes(id));
+});
+test('an uncertain send deleted elsewhere cannot resurrect, and ending verification retains input',async()=>{
+  const f=fixture(true),m=createMessenger(f.win,f.profiles);await m.bind(f.session,f.signal);f.state.loseConfirmation=true;m.input(f.friend.id,'待核对原文');m.submit(f.friend.id);await tick();const id=m.draft(f.friend.id).operation.message.messageId;f.state.loseConfirmation=false;
+  const h=await f.store.read();await f.store.change(createChange(h,f.friend.id,'delete',[id]));await m.refresh();await m.retry(f.friend.id);assert.equal((await f.store.read()).messages.length,0);assert(m.draft(f.friend.id).operation.error);
+  await m.endSend(f.friend.id);assert.equal(m.draft(f.friend.id).operation,null);assert.equal(m.draft(f.friend.id).text,'待核对原文');
+  m.submit(f.friend.id);await tick();assert.equal(m.history().messages.length,1);assert.notEqual(m.history().messages[0].messageId,id);
 });

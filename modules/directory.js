@@ -8,7 +8,7 @@ import { apiSettings, materialEditor, personaPreview } from './ai-editor.js';
 import { currentPersona } from './ai.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
-export function createDirectory({ window: win, document: doc, navigate, icon, notify }) {
+export function createDirectory({ window: win, document: doc, navigate, icon, notify, onReplyState }) {
   const host = createProfileHost(win);
   const messenger = createMessenger(win, host);
   let clearMessageView;
@@ -172,7 +172,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const commit = button(restore ? '确认恢复' : '确认删除', async () => {
       if (!current() || busy) return;
       const pending = messenger.draft(person.id);
-      if (!restore && (pending.text || pending.operation)) { status.textContent = '此人物有未发送草稿或未确认消息，请先在聊天页处理后再删除'; return; }
+      if (!restore && (pending.text || pending.operation || pending.editing || pending.quoteId || messenger.status().change)) { status.textContent = '此人物有未发送草稿或未确认消息，请先在聊天页处理后再删除'; return; }
       const book = clone(captured.book), target = book.people.find(p => p.id === person.id);
       if (!target || !!target.deletedAt !== restore) { status.textContent = '人物状态已变化，请返回重新读取'; return; }
       if (restore) delete target.deletedAt; else target.deletedAt = new Date().toISOString();
@@ -252,7 +252,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const person = session.book.people.find(p => p.id === selected && p.relation.friend && !p.deletedAt);
       const more = button('', () => { lastFormRoute = 'chat'; go('details'); }, 'icon-button'); more.setAttribute('aria-label', '聊天资料'); more.innerHTML = icon('more');
       const { wrap, scroll } = base(person ? displayName(person) : '聊天', chatBack, person ? more : undefined);
-      if (person) clearMessageView = mountConversation({wrap, scroll, person, self: session.book.self, messenger, el, button, avatar, icon});
+      if (person) clearMessageView = mountConversation({wrap, scroll, person, self: session.book.self, messenger, el, button, avatar, icon, onReplyState});
       else empty(scroll, '找不到这个好友，请返回联系人');
       return wrap;
     }

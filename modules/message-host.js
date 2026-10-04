@@ -1,6 +1,6 @@
 import { ttStore, ttHost } from './host.js';
 import { clone, sameJson } from './contacts.js';
-import { newHistory, validateHistory, appendMessage, messagePersonId } from './messages.js';
+import { newHistory, validateHistory, appendMessage, messagePersonId, applyChange, changeFingerprint } from './messages.js';
 export const messageKey = (account, archiveId) => `yui-glass-phone.messages.v1:${encodeURIComponent(account)}:${encodeURIComponent(archiveId)}`;
 export function createMessageStore(win, profiles, session, signal) {
   const archiveId = session.book.id, key = messageKey(session.account, archiveId);
@@ -13,7 +13,7 @@ export function createMessageStore(win, profiles, session, signal) {
     else { const text = win.localStorage.getItem(key); if (text !== null) { try { raw = JSON.parse(text); } catch { throw Error('消息读取失败，已停止覆盖历史'); } } }
     guard(); return raw === undefined ? newHistory(archiveId) : validateHistory(clone(raw), archiveId);
   }
-  return { read, async send(message, expectedRevision) {
+  async function commit(personId, transform) {
     guard();
     if (!win.navigator?.locks?.request) throw Error('当前宿主缺少安全的多窗口写入锁，已停止保存消息，请更新宿主');
     return win.navigator.locks.request(key, { mode: 'exclusive', signal }, async () => {
@@ -22,13 +22,9 @@ export function createMessageStore(win, profiles, session, signal) {
       const fresh = await profiles.load(signal); guard();
       if (fresh.book.id !== archiveId || fresh.account !== session.account) throw Error('存档身份已变化，未写入消息');
       const previous = await read();
-      const existing = previous.messages.find(m => m.messageId === message.messageId);
-      if (existing) {
-        if (!sameJson(existing, message)) throw Error('相同消息 ID 的内容不一致，未写入');
-        return previous; // A previous native write succeeded even if confirmation failed.
-      }
-      if (!fresh.book.people.some(p => p.id === messagePersonId(message) && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
-      const next = appendMessage(previous, message, expectedRevision);
+      const next = transform(previous);
+      if (sameJson(next, previous)) return previous; // Confirm an already committed operation without rewriting.
+      if (!fresh.book.people.some(p => p.id === personId && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
       guard();
       // Recheck immediately before dispatch. Web Locks serialize cooperating windows.
       const latest = await read(); if (!sameJson(latest, previous)) throw Error('消息在保存前发生变化，请重新读取，未覆盖');
@@ -41,5 +37,8 @@ export function createMessageStore(win, profiles, session, signal) {
       if (!sameJson(confirmed, next)) throw Error('保存结果未确认，请按原消息 ID 核对重试');
       return confirmed;
     });
-  } };
+  }
+  return { read, send: (message, expectedRevision) => commit(messagePersonId(message), previous => appendMessage(previous, message, expectedRevision)),
+    async change(operation) { const fingerprint = await changeFingerprint(operation); guard(); return commit(operation.personId, previous => applyChange(previous, operation, fingerprint)); },
+  };
 }

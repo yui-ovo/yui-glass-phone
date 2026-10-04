@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultConfig, validateConfig, saveConfig, readConfig, apiRequest, replyContext, buildPrompt, currentPersona, materialSnapshot, worldEntries, materialKey } from '../modules/ai.js';
 import { newBook, newPerson, clone, validateBook } from '../modules/contacts.js';
-import { createMessage, createReply, appendMessage, newHistory, validateHistory } from '../modules/messages.js';
+import { createMessage, createReply, appendMessage, newHistory, validateHistory, createChange, applyChange, changeFingerprint } from '../modules/messages.js';
 const config = () => ({ ...defaultConfig(), baseUrl: 'https://api.example.test/v1/', apiKey: 'fixture-secret', model: 'fixture-model' });
 test('independent config rejects malformed input and storage failures; secret never passed through URL', async () => {
   assert.equal(validateConfig(config()).baseUrl, 'https://api.example.test/v1');
@@ -44,4 +44,15 @@ test('incoming records share old history safely and cannot spoof direction or so
   const incoming=createReply('book','person','回复',2);history=appendMessage(history,incoming,1);
   assert.equal(history.messages[1].sender.id,'person');assert.equal(history.messages[1].recipient.id,'self:book');assert.deepEqual(appendMessage(history,incoming,0),history);
   for(const patch of [{source:'phone-manual'},{conversationId:'direct:wrong'},{recipient:{kind:'self',id:'self:other'}}]) assert.throws(()=>validateHistory({...history,messages:[history.messages[0],{...incoming,...patch}]},'book'));
+});
+test('old API settings get prompt/timeout defaults without losing credentials and custom prompt reaches request',()=>{
+  const old=config();delete old.prompt;delete old.timeoutSeconds;const value=validateConfig(old);assert.equal(value.timeoutSeconds,120);assert(value.prompt.includes('手机'));assert.equal(value.apiKey,old.apiKey);
+  assert.throws(()=>validateConfig({...value,prompt:' '}));assert.throws(()=>validateConfig({...value,timeoutSeconds:5}));
+  const prompt=buildPrompt({},newHistory('b'),'p',40,'只用短句，少写旁白');assert.equal(prompt[0].content,'只用短句，少写旁白');
+});
+test('edited/deleted quoted content resolves from current records in AI context',async()=>{
+  const first=createMessage('b','p','原来的秘密',1),second=createMessage('b','p','引用回复',2);second.replyTo=first.messageId;
+  let history=appendMessage(appendMessage(newHistory('b'),first,0),second,1);
+  const edit=createChange(history,'p','edit',[first.messageId],'最新文字');history=applyChange(history,edit,await changeFingerprint(edit));let prompt=JSON.stringify(buildPrompt({},history,'p',1));assert(prompt.includes('最新文字'));assert(!prompt.includes('原来的秘密'));
+  const remove=createChange(history,'p','delete',[first.messageId]);history=applyChange(history,remove,await changeFingerprint(remove));prompt=JSON.stringify(buildPrompt({},history,'p',40));assert(!prompt.includes('最新文字'));assert(prompt.includes('原消息已删除'));
 });
