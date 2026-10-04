@@ -28,6 +28,15 @@ try{
   });
   await p.goto(base+'/preview.html');await p.evaluate(async()=>{const {saveConfig,defaultConfig}=await import('/modules/ai.js');saveConfig(window,{...defaultConfig(),baseUrl:'https://ai.fixture.test/v1',model:'fixture'});localStorage.setItem('tavern_friends_old','UNCHANGED');});
   await add(p,'好友甲');await add(p,'好友乙');await chat(p);
+  await b(p,'添加附件').click();
+  assert.equal(await b(p,'添加附件').getAttribute('aria-expanded'),'true');
+  const grid=p.locator('.attachment-panel[data-view="home"]');assert.equal(await grid.locator('.attachment-tool').count(),2);
+  const panelBounds=await grid.boundingBox(),aBounds=await b(p,'表情包').boundingBox(),bBounds=await b(p,'转账').boundingBox(),composerBounds=await p.locator('.text-composer').boundingBox();
+  assert(Math.abs(aBounds.y-bBounds.y)<2);assert(aBounds.width<90);assert(panelBounds.height<135);assert(panelBounds.y+panelBounds.height<=composerBounds.y+1);
+  assert.equal(await grid.locator('svg').count(),2);assert.equal(await grid.locator('.profile-action').count(),0);
+  await p.screenshot({path:path.join(root,`test-results/attachments-tools-${tt?'tt':'st'}.png`)});
+  await b(p,'添加附件').click();assert(await grid.isHidden());await b(p,'添加附件').click();await p.locator('.real-messages').click({position:{x:20,y:30}});assert(await grid.isHidden());
+  await b(p,'添加附件').click();await p.keyboard.press('Escape');assert(await grid.isHidden());
   await box(p).fill('未发送草稿');await b(p,'添加附件').click();await b(p,'转账').click();await p.getByLabel('转账金额',{exact:true}).fill('5元');await b(p,'发送转账').click();assert((await p.locator('.attachment-panel .profile-status').textContent()).includes('金额'));
   await p.getByLabel('转账金额',{exact:true}).fill('5.20');await p.getByLabel('转账备注',{exact:true}).fill('<img onerror=alert(1)>');await b(p,'发送转账').click();await wait(async()=>!(await p.locator('.pending-message').count())&&(await histories(p,tt))[0]?.messages.length===1,'transfer saved');assert.equal(await box(p).inputValue(),'未发送草稿');assert.equal(requests.length,0);assert.equal(await p.locator('.transfer-bubble img').count(),0);
   await b(p,'返回').click();assert((await b(p,'打开聊天：好友甲').textContent()).includes('5.20'));await b(p,'打开聊天：好友甲').click();assert.equal(await box(p).inputValue(),'未发送草稿');await box(p).fill('');

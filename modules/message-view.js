@@ -33,6 +33,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     input.style.height = '0px';
     input.style.height = `${Math.max(22, input.scrollHeight)}px`;
     input.scrollTop = top;
+    wrap.style.setProperty('--attachment-bottom', `${composer.offsetHeight + 10}px`);
   }
   function controls() {
     const state = messenger.draft(person.id), size = [...state.text].length;

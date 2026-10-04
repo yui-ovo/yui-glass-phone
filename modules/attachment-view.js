@@ -5,13 +5,15 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   const win = wrap.ownerDocument.defaultView, state = messenger.draft(person.id);
   const form = state.attachment ||= { amount:'', note:'', description:'', category:'默认', urls:'', files:[], allowedAI:false, edit:0, busy:false };
   const library = messenger.library(), panel = el('section', 'attachment-panel'); panel.hidden = true; wrap.append(panel);
+  const life = new AbortController(), trigger = wrap.querySelector('[aria-label="添加附件"]');
+  trigger?.setAttribute('aria-expanded','false');
   let active = true, task, view = '', selectedTransfer;
   const hostSignal = messenger.sessionSignal();
   const current = controller => active && !hostSignal.aborted && !controller?.signal.aborted;
   function cancel() { task?.abort(); task = undefined; form.busy = false; }
-  function close() { cancel(); panel.hidden = true; panel.replaceChildren(); view = ''; }
+  function close() { cancel(); panel.hidden = true; panel.replaceChildren(); view = ''; trigger?.setAttribute('aria-expanded','false'); }
   function frame(title) {
-    cancel(); panel.replaceChildren(); panel.hidden = false; panel.setAttribute('aria-label', title);
+    cancel(); panel.replaceChildren(); panel.hidden = false; panel.dataset.view = view; panel.setAttribute('aria-label', title); trigger?.setAttribute('aria-expanded','true');
     const head = el('div','attachment-head'); head.append(el('strong','',title),button('×',close,'attachment-close')); head.lastChild.setAttribute('aria-label','关闭附件面板'); panel.append(head);
     const body = el('div','attachment-body'), status = el('p','profile-status'); status.setAttribute('role','status'); panel.append(body,status); return {body,status};
   }
@@ -22,8 +24,16 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
     row.append(field); body.append(row); return field;
   }
   function home() {
-    view='home'; const {body}=frame('添加');
-    body.append(button('表情包',stickers),button('转账',transfer));
+    view='home'; const {body}=frame('聊天工具');
+    body.classList.add('attachment-tools');
+    const paths = { sticker:'M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4h-2 M13 21v-4a4 4 0 0 1 4-4h4 M8 9h.01 M15 9h.01 M8 13c1 1.5 2.5 2 4 1.5', transfer:'M5 8h14m-4-4 4 4-4 4 M19 16H5m4-4-4 4 4 4' };
+    for(const [label,glyph,run] of [['表情包','sticker',stickers],['转账','transfer',transfer]]) {
+      const item=button('',run,'attachment-tool');item.setAttribute('aria-label',label);
+      const tile=el('span','attachment-tool-icon'), svg=wrap.ownerDocument.createElementNS('http://www.w3.org/2000/svg','svg'), path=wrap.ownerDocument.createElementNS('http://www.w3.org/2000/svg','path');
+      svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');path.setAttribute('d',paths[glyph]);svg.append(path);tile.append(svg);
+      item.append(tile,el('span','attachment-tool-label',label));body.append(item);
+    }
+    queueMicrotask(()=>{if(active&&view==='home'&&!panel.hidden)body.querySelector('button')?.focus({preventScroll:true});});
   }
   function transfer() {
     view='transfer'; const {body,status}=frame('转账');
@@ -92,5 +102,7 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
     },'profile-action primary'),button('返回表情包',stickers),button('取消导入',()=>{form.files=[];form.urls='';form.description='';form.edit++;void stickers();}));
   }
   const abort=()=>close();hostSignal.addEventListener('abort',abort,{once:true});
-  return {open:home,inspectTransfer,close,paint(){if(view==='receipt'&&!panel.hidden){const m=messenger.history()?.messages.find(m=>m.messageId===selectedTransfer);if(!m)close();}},dispose(){active=false;cancel();hostSignal.removeEventListener('abort',abort);panel.remove();}};
+  wrap.addEventListener('pointerdown',event=>{if(view==='home'&&!panel.hidden&&!panel.contains(event.target)&&!trigger?.contains(event.target))close();},{signal:life.signal});
+  wrap.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden){event.preventDefault();event.stopPropagation();close();trigger?.focus({preventScroll:true});}},{signal:life.signal});
+  return {open(){if(!panel.hidden){close();return;}wrap.querySelector('.text-composer textarea')?.blur();home();},inspectTransfer,close,paint(){if(view==='receipt'&&!panel.hidden){const m=messenger.history()?.messages.find(m=>m.messageId===selectedTransfer);if(!m)close();}},dispose(){active=false;cancel();life.abort();hostSignal.removeEventListener('abort',abort);panel.remove();}};
 }
