@@ -76,3 +76,8 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 ## 0.9.2 旧版面板样式移植
 
 按用户明确要求移植其 yui-ovo/yui-sillyphone/phone-ui.html 的 sticker-panel、header、tabs、filter、grid、upload-zone 表情包样式与四页签结构（此前核实基线 ef39b16362b70fea18eb6a1d0fe333659b72d9ac）。增加本项目附件作用域，调整宽度/页签间距/最大高度以适配现手机。原 sendTransfer 使用浏览器 prompt，没有独立 CSS；新弹窗保留现有安全金额校验与业务逻辑。未引入旧 AI 识图接口、全局脚本、同层存储或其他作者实现。此节是本次用户授权的 UI 复用记录，先前版本未复用 UI 的历史说明只适用于对应版本。
+
+
+## 0.9.3 灰色面板来源纠正
+
+用户确认以 yui-ovo/yuii 的 phone-ui.css（blob 68ef83782423baa40fcb5a8e9e74e42754bb018d）和 phone-ui.js（blob 62b4ad6318f8c5338489c79b9d81a7397c7c7235）为灰色参考。核实其 .chat-panel、.sticker-tabs、.sticker-grid、.sticker-item、.panel-action-btn：半透明白色叠加灰机身、12px 模糊、16px 内距、白色选中胶囊、四列/180px 图片区；转账按钮由脚本设为白色 20% 透明。移植这些样式规则到新项目隔离选择器，适配本机身宽度和安全高度。对应 HTML 在当前仓库缺失；同名 HTML 实为另一套浅色界面。本轮按样式及交互定义重建 DOM，无执行旧脚本或读写旧存储。

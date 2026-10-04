@@ -5,17 +5,15 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   const win = wrap.ownerDocument.defaultView, state = messenger.draft(person.id);
   const form = state.attachment ||= { amount:'', note:'', description:'', category:'默认', urls:'', files:[], allowedAI:false, edit:0, busy:false };
   const library = messenger.library(), panel = el('section', 'attachment-panel'); panel.hidden = true; wrap.append(panel);
-  const shade = el('div','attachment-shade'); shade.hidden=true; wrap.append(shade);
   const life = new AbortController(), trigger = wrap.querySelector('[aria-label="添加附件"]');
   trigger?.setAttribute('aria-expanded','false');
   let active = true, task, view = '', selectedTransfer;
   const hostSignal = messenger.sessionSignal();
   const current = controller => active && !hostSignal.aborted && !controller?.signal.aborted;
   function cancel() { task?.abort(); task = undefined; form.busy = false; }
-  function close() { cancel(); shade.hidden=true; panel.hidden = true; panel.replaceChildren(); view = ''; trigger?.setAttribute('aria-expanded','false'); }
+  function close() { cancel(); panel.hidden = true; panel.replaceChildren(); view = ''; trigger?.setAttribute('aria-expanded','false'); }
   function frame(title) {
     cancel(); panel.replaceChildren(); panel.hidden = false; panel.dataset.view = view; panel.setAttribute('aria-label', title); trigger?.setAttribute('aria-expanded','true');
-    shade.hidden = view==='home';
     const head = el('div','attachment-head'); head.append(el('strong','',title),button('×',close,'attachment-close')); head.lastChild.setAttribute('aria-label','关闭附件面板'); panel.append(head);
     const openedView=view;queueMicrotask(()=>{if(active&&view===openedView&&!panel.hidden)panel.querySelector(view==='transfer'?'.attachment-dialog-actions button':'.attachment-close')?.focus({preventScroll:true});});
     const body = el('div','attachment-body'), status = el('p','profile-status'); status.setAttribute('role','status'); panel.append(body,status); return {body,status};
@@ -56,13 +54,14 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
     body.append(el('p','profile-help','虚构转账，不涉及真实支付或钱包余额。'));
   }
   function stickerFrame(selected) {
-    const result=frame('😄 表情包管理'),tabs=el('nav','sticker-tabs');tabs.setAttribute('aria-label','表情包页面');
-    for(const [key,label] of [['stickers','我的表情包'],['import','添加表情包'],['tags','管理标签'],['settings','设置']]) {
-      const tab=button(label,()=>key==='import'?importView():void stickers(key),'sticker-tab');
-      if(key===selected){tab.classList.add('active');tab.setAttribute('aria-current','page');}
-      tabs.append(tab);
-    }
-    panel.insertBefore(tabs,result.body);return result;
+    const titles={stickers:'表情包',import:'添加表情包',tags:'管理标签',settings:'表情包设置'};
+    const result=frame(titles[selected]),head=panel.querySelector('.attachment-head'),tools=el('div','sticker-header-tools');
+    if(selected==='stickers') {
+      const add=button('＋',importView,'sticker-header-button');add.setAttribute('aria-label','添加表情包');
+      const menu=el('details','sticker-more'),toggle=el('summary','','⋯');toggle.setAttribute('aria-label','表情包管理');
+      const choices=el('div','sticker-more-menu');choices.append(button('管理标签',()=>void stickers('tags')),button('设置',()=>void stickers('settings')));menu.append(toggle,choices);tools.append(add,menu);
+    } else tools.append(button('返回',()=>void stickers(),'sticker-header-button'));
+    head.insertBefore(tools,head.lastChild);return result;
   }
   async function stickers(mode='stickers') {
     view=mode; const {body,status}=stickerFrame(mode), controller=new AbortController();task=controller;
@@ -72,11 +71,15 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
       if(mode==='settings')body.append(el('p','profile-help','勾选后，角色可在你请求回复时使用该表情包。AI 通过描述理解图片，尚未接入识图。'));
       if(mode==='tags')body.append(el('p','profile-help','修改每张表情包的标签；保存后可在收藏中按标签筛选。'));
       const filterRow=el('div','sticker-filter'),count=el('span','sticker-count');
-      const filter=el('select');filter.setAttribute('aria-label','表情包分类');
-      for(const category of ['全部',...new Set(assets.map(a=>a.category||'默认'))]){const option=el('option','',category);option.value=category;filter.append(option);}
+      const filter=el('nav','sticker-tabs');filter.setAttribute('aria-label','表情包分类');
+      let selected='';
+      for(const category of ['',...new Set(assets.map(a=>a.category||'默认'))]){
+        const tab=button(category||'收藏',()=>{selected=category;paint();},'sticker-tab');tab.dataset.category=category;filter.append(tab);
+      }
       filterRow.append(filter,count);body.append(filterRow);
       const grid=el('div',mode==='stickers'?'sticker-grid':'sticker-management');body.append(grid);
-      function paint(){grid.replaceChildren();const visible=assets.filter(a=>filter.value==='全部'||a.category===filter.value);
+      function paint(){grid.replaceChildren();const visible=assets.filter(a=>!selected||a.category===selected);
+        for(const tab of filter.children){const active=tab.dataset.category===selected;tab.classList.toggle('active',active);tab.setAttribute('aria-pressed',String(active));}
         count.textContent=`共 ${visible.length} 个`;
         if(!visible.length){const empty=el('div','sticker-empty');empty.append(el('span','','☺'),el('p','','还没有表情包'),button('导入表情包',importView,'sticker-empty-add'));grid.append(empty);}
         for(const asset of visible){
@@ -99,7 +102,7 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
           details.append(actions);
           card.append(details);grid.append(card);
         }
-      }filter.onchange=paint;paint();
+      }paint();
       if(mode==='settings')body.append(el('p','profile-help','素材保存在本机，可供不同存档使用。移出收藏后，已发送的图片仍保留。'));
     }catch(e){if(current(controller))status.textContent=e.message;}
   }
@@ -127,9 +130,8 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
       finally{form.busy=false;if(current(controller))fields.forEach(f=>f.disabled=false);}
     },'profile-action primary'),button('返回表情包',()=>void stickers()),button('取消导入',()=>{form.files=[];form.urls='';form.description='';form.edit++;void stickers();}));
   }
-  shade.addEventListener('click',close,{signal:life.signal});
   const abort=()=>close();hostSignal.addEventListener('abort',abort,{once:true});
-  wrap.addEventListener('pointerdown',event=>{if(view==='home'&&!panel.hidden&&!panel.contains(event.target)&&!trigger?.contains(event.target))close();},{signal:life.signal});
+  wrap.addEventListener('pointerdown',event=>{if(!panel.hidden&&!panel.contains(event.target)&&!trigger?.contains(event.target))close();},{signal:life.signal});
   wrap.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden){event.preventDefault();event.stopPropagation();close();trigger?.focus({preventScroll:true});}},{signal:life.signal});
-  return {open(){if(!panel.hidden){close();return;}wrap.querySelector('.text-composer textarea')?.blur();home();},inspectTransfer,close,paint(){if(view==='receipt'&&!panel.hidden){const m=messenger.history()?.messages.find(m=>m.messageId===selectedTransfer);if(!m)close();}},dispose(){active=false;cancel();life.abort();hostSignal.removeEventListener('abort',abort);panel.remove();shade.remove();}};
+  return {open(){if(!panel.hidden){close();return;}wrap.querySelector('.text-composer textarea')?.blur();home();},inspectTransfer,close,paint(){if(view==='receipt'&&!panel.hidden){const m=messenger.history()?.messages.find(m=>m.messageId===selectedTransfer);if(!m)close();}},dispose(){active=false;cancel();life.abort();hostSignal.removeEventListener('abort',abort);panel.remove();}};
 }
