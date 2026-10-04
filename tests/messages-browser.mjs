@@ -38,6 +38,7 @@ async function start(tt = false, suffix = '') {
 async function open(page) { await b(page, '打开消息').click(); await b(page, '联系人').click(); await until(() => b(page, '登记人物').count(), 'contacts loaded'); }
 async function add(page, name, relation = 'friend', card = true) {
   await b(page, '登记人物').click(); await b(page, card ? '从当前角色卡带入' : '手动创建人物').click();
+  if(card && await b(page,'登记这张卡里的另一位人物').count()) await b(page,'登记这张卡里的另一位人物').click();
   if (card) assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '花店故事标题');
   await page.getByLabel('人物名字', { exact: true }).fill(name); await page.getByLabel('开局关系', { exact: true }).selectOption(relation);
 }
@@ -104,16 +105,21 @@ try {
     await textBox(p).dispatchEvent('compositionstart');assert(await b(p,'发送').isDisabled());await textBox(p).dispatchEvent('compositionend');
     const content='你好\n多行 🌙🙂\n<img src=x onerror=alert(1)> /send 不执行';
     await sendText(p,content);assert.equal(await bubbles(p).last().textContent(),content);assert.equal(await p.locator('.real-messages img[src=x]').count(),0);
-    assert.equal(await p.locator('.sp-message-sender-cv2').textContent(),'我');
+    assert.equal(await p.locator('.sp-message-sender-cv2').count(),0);
+    const avatarBounds=await p.locator('.real-messages .avatar').last().boundingBox(), bubbleBounds=await bubbles(p).last().boundingBox();
+    assert.equal(Math.round(avatarBounds.width),40);assert(Math.abs(avatarBounds.y-bubbleBounds.y)<1,'avatar and bubble align at top');
     await b(p,'返回').click();await b(p,'消息').click();assert((await p.locator('.message-summary').first().textContent()).includes('你好 多行'));assert.equal(await p.locator('.unread').count(),0);
     await b(p,'打开聊天：好友乙').click();assert.equal(await bubbles(p).count(),0);await sendText(p,'相同文字');await sendText(p,'相同文字');assert.equal(await bubbles(p).count(),2);
     await b(p,'返回').click();await b(p,'消息').click();assert.equal(await p.locator('.contact-row').first().getAttribute('aria-label'),'打开聊天：好友乙');
     await b(p,'打开聊天：好友甲').click();await textBox(p).fill('甲未发草稿');await b(p,'返回').click();await b(p,'打开聊天：好友乙').click();assert.equal(await textBox(p).inputValue(),'');
     await textBox(p).fill('乙未发草稿');await b(p,'收起手机').click();await b(p,'打开灰玻璃小手机').click();assert.equal(await textBox(p).inputValue(),'乙未发草稿');await textBox(p).fill('');
     await b(p,'返回').click();await b(p,'打开聊天：好友甲').click();assert.equal(await textBox(p).inputValue(),'甲未发草稿');await textBox(p).fill('');
-    await b(p,'聊天资料').click();await p.getByLabel('手机备注',{exact:true}).fill('甲备注');await b(p,'恢复默认头像').click();await save(p);await b(p,'取消').click();assert.equal(await bubbles(p).count(),1);
+    await b(p,'聊天资料').click();await p.getByLabel('手机备注',{exact:true}).fill('甲备注');await b(p,'恢复默认头像').click();
+    await p.getByLabel('开局关系',{exact:true}).selectOption('stranger');await save(p);
+    await p.getByLabel('开局关系',{exact:true}).selectOption('friend');await save(p);await b(p,'取消').click();assert.equal(await bubbles(p).count(),1);
     await sendText(p,'资料修改后发送');const profile=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0];
     assert.equal(profile.people[0].remark,'甲备注');assert.equal(profile.id,before.id);assert.equal(profile.self.account,before.self.account);
+    assert.equal(profile.people.length,2);assert.equal(profile.people[0].id,before.people[0].id);assert.equal(profile.people[0].account,before.people[0].account);
     await p.reload();await open(p);await b(p,'打开聊天：甲备注').click();assert.equal(await bubbles(p).count(),2);
     await textBox(p).fill('字'.repeat(10001));assert(await b(p,'发送').isDisabled());assert((await p.locator('.message-feedback').textContent()).includes('10000'));await textBox(p).fill('  \n ');assert(await b(p,'发送').isDisabled());await textBox(p).fill('');
     await sendText(p,'长'.repeat(10000));assert.equal((await bubbles(p).last().textContent()).length,10000);

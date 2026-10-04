@@ -42,7 +42,8 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
     const row = el('div', 'sp-message-cv2 self'), main = el('div', 'sp-message-main-cv2 self');
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
     const line = el('div', 'sp-message-row-cv2 self'), text = el('div', 'sp-message-bubble-cv2 self', message.text);
-    line.append(text); main.append(el('div', 'sp-message-sender-cv2 self', self.name), line);
+    line.append(text); main.append(line);
+    row.setAttribute('aria-label', `我方消息，${self.name}`);
     const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
     time.title = '设备记录时间，不代表剧情时间'; time.dateTime = message.createdAt; main.append(time);
     row.append(main, avatar(self)); return row;

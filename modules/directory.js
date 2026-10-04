@@ -70,7 +70,11 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const preview = button('', () => upload.click(), 'profile-avatar-button'); preview.setAttribute('aria-label', '更换头像'); scroll.append(preview);
     function renderAvatar() { preview.replaceChildren(avatar({ ...draft, name: draft.name || '我' })); }
     field(self ? '我的名字' : '人物名字', draft.name, 'name');
-    if (!self) { field('手机备注', draft.remark, 'remark'); field('简短设定', draft.description, 'description', 1000, true); }
+    if (!self) {
+      field('手机备注', draft.remark, 'remark');
+      const persona = field('线上人设（如有）', draft.description, 'description', 1000, true);
+      persona.placeholder = '可填写作者设定的线上聊天习惯、语气、表情使用方式等';
+    }
     scroll.append(el('p', 'profile-meta', `虚构账号：${draft.account}`));
     if (!self) {
       scroll.append(el('p', 'profile-meta', `来源：${draft.source.name || '手动创建'}`));
@@ -107,7 +111,12 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const save = button(self ? '保存我的名片' : '保存人物', async () => {
       if (busy || saving || !current()) return;
       const book = clone(captured.book), value = clone(draft); value.name = value.name.trim();
-      if (!self) { value.remark = value.remark.trim(); value.description = value.description.trim(); const index = book.people.findIndex(p => p.id === value.id); if (index === -1) book.people.push(value); else book.people[index] = value; }
+      if (!self) {
+        value.remark = value.remark.trim(); value.description = value.description.trim();
+        const index = book.people.findIndex(p => p.id === value.id);
+        if (persisted && index === -1) { status.textContent = '找不到原人物，已停止保存；请返回人物管理重新读取'; return; }
+        if (index === -1) book.people.push(value); else book.people[index] = value;
+      }
       else book.self = value;
       saving = true; status.textContent = '正在保存…'; const controls = [...scroll.querySelectorAll('input, textarea, select, button'), save, cancel]; controls.forEach(n => n.disabled = true);
       try { await host.save(captured, book, signal); if (current()) { Object.assign(draft, value); persisted = true; baseline = clone(draft); baselineUrl = url.value; selected = self ? selected : value.id; status.textContent = '已保存到当前存档'; } }
@@ -132,7 +141,23 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }
     if (target === 'details') return editorPage();
     if (target === 'self') return editorPage(true);
-    if (target === 'new-card') return editorPage(false, session.snapshot.source);
+    if (target === 'new-card') {
+      const source = session.snapshot.source;
+      const existing = source?.avatarFile ? session.book.people.filter(p => p.source.kind === 'card' && p.source.avatarFile === source.avatarFile) : [];
+      if (existing.length) {
+        const { wrap, scroll } = base('此角色卡已有登记', 'add');
+        scroll.append(el('p', 'profile-help', '修改开局关系或资料，请点下面已有的人物。只有这张卡里确实还有另一位人物时，才继续新登记。'));
+        for (const person of existing) {
+          const row = personRow(person, true);
+          row.querySelector('small').textContent = `${relationship(person)} · 账号 ${person.account}`;
+          scroll.append(row);
+        }
+        scroll.append(button('登记这张卡里的另一位人物', () => go('new-card-extra')));
+        return wrap;
+      }
+      return editorPage(false, source);
+    }
+    if (target === 'new-card-extra') return editorPage(false, session.snapshot.source);
     if (target === 'new-manual') return editorPage(false, null);
     if (target === 'chat') {
       const person = session.book.people.find(p => p.id === selected && p.relation.friend);
@@ -187,11 +212,11 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   }
   const unsubscribe = host.subscribe(() => {
     const hadDraft = editor?.dirty() || messenger.dirty(); clearEditor(); clearMessageView?.(); clearMessageView = undefined; messenger.reset(); controller.abort(); controller = new AbortController(); generation++; session = undefined; selected = undefined; loading = false; loadError = '';
-    if (['chat', 'details', 'new-card', 'new-manual', 'self'].includes(route)) route = 'people';
+    if (['chat', 'details', 'new-card', 'new-card-extra', 'new-manual', 'self'].includes(route)) route = 'people';
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-manual', 'chat', 'details', 'self'].includes(target),
+  return { render, handles: target => ['messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'details', 'self'].includes(target),
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
     dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },

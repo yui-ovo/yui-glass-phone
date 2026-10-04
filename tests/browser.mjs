@@ -31,6 +31,7 @@ async function start(tt = false, suffix = '') {
 async function open(page) { await b(page, '打开消息').click(); await b(page, '联系人').click(); await until(() => b(page, '登记人物').count(), 'contacts loaded'); }
 async function add(page, name, relation = 'friend', card = true) {
   await b(page, '登记人物').click(); await b(page, card ? '从当前角色卡带入' : '手动创建人物').click();
+  if(card && await b(page,'登记这张卡里的另一位人物').count()) await b(page,'登记这张卡里的另一位人物').click();
   if (card) assert.equal(await page.getByLabel('人物名字', { exact: true }).inputValue(), '花店故事标题');
   await page.getByLabel('人物名字', { exact: true }).fill(name); await page.getByLabel('开局关系', { exact: true }).selectOption(relation);
 }
@@ -38,6 +39,24 @@ async function save(page) { await b(page, '保存人物').click(); await until(a
 async function storage(page, tt = false) { return page.evaluate(tt => JSON.parse(localStorage.getItem(tt ? 'fixture.tt.store' : 'yui-glass-phone.contacts.v1:test-user') || 'null'), tt); }
 async function books(page, tt = false) { const data = await storage(page, tt); return tt ? Object.values(data || {}) : Object.values(data?.books || {}); }
 try {
+  for(const tt of [false,true]) {
+    const p=await start(tt);await open(p);await add(p,'关系人物','stranger');
+    await p.getByLabel('线上人设（如有）',{exact:true}).fill('线上话少，喜欢用表情。');await save(p);
+    const first=(await books(p,tt))[0].people[0];
+    await p.getByLabel('开局关系',{exact:true}).selectOption('friend');await save(p);await save(p);
+    let data=(await books(p,tt))[0];assert.equal(data.people.length,1);assert.equal(data.people[0].id,first.id);assert.equal(data.people[0].account,first.account);assert.deepEqual(data.people[0].source,first.source);
+    await b(p,'取消').click();await b(p,'编辑关系人物').click();await p.getByLabel('开局关系',{exact:true}).selectOption('known');await save(p);await b(p,'取消').click();
+    await b(p,'登记人物').click();await b(p,'从当前角色卡带入').click();
+    assert(await p.getByRole('heading',{name:'此角色卡已有登记'}).isVisible());assert.equal(await p.getByLabel('人物名字',{exact:true}).count(),0);
+    data=(await books(p,tt))[0];assert.equal(data.people.length,1);
+    await b(p,'编辑关系人物').click();assert.equal(await p.getByLabel('线上人设（如有）',{exact:true}).inputValue(),first.description);
+    await p.getByLabel('开局关系',{exact:true}).selectOption('friend');await save(p);await p.reload();await open(p);await b(p,'管理剧情人物').click();
+    data=(await books(p,tt))[0];assert.equal(data.people.length,1);assert.equal(data.people[0].id,first.id);assert.equal(data.people[0].account,first.account);assert.equal(data.people[0].description,first.description);assert.deepEqual(data.people[0].source,first.source);
+    // An explicit second character on the same card is legal, even with the same name.
+    await b(p,'登记人物').click();await b(p,'从当前角色卡带入').click();await b(p,'登记这张卡里的另一位人物').click();await p.getByLabel('人物名字',{exact:true}).fill('关系人物');await save(p);
+    data=(await books(p,tt))[0];assert.equal(data.people.length,2);assert.notEqual(data.people[0].id,data.people[1].id);
+    assert.deepEqual(p.errors,[]);await p.close();passed.push(`${tt?'TT':'ST'}: repeat relationship edits preserve identity/count/persona; repeated card import selects existing; explicit same-name second character remains independent`);
+  }
   for (const tt of [false, true]) {
     const p=await start(tt);await b(p,'收起手机').click();
     const launcher=b(p,'打开灰玻璃小手机');
