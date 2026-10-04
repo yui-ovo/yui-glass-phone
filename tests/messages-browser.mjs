@@ -63,13 +63,15 @@ try {
     await b(p,'查看联系人：名片人物').click();assert.equal(await textBox(p).count(),0);
     assert.equal(await p.locator('.person-name').textContent(),'名片人物');
     if(!tt)await p.screenshot({path:path.join(root,'test-results/contact-card.png')});
-    await b(p,'朋友资料').click();await p.getByLabel('手机备注',{exact:true}).fill('备注人物');await save(p);await b(p,'取消').click();
+    assert.equal(await b(p,'朋友资料').count(),0);assert.equal(await b(p,'联系人资料设置').count(),0);
+    await b(p,'返回').click();await b(p,'联系人更多').click();await b(p,'管理剧情人物').click();await b(p,'编辑名片人物').click();
+    await p.getByLabel('手机备注',{exact:true}).fill('备注人物');await save(p);await b(p,'取消').click();await backContacts(p);await b(p,'查看联系人：备注人物').click();
     assert.equal(await p.locator('.person-name').textContent(),'备注人物');assert.equal(await textBox(p).count(),0);
     await b(p,'朋友圈').click();assert((await p.locator('.toast').textContent()).includes('尚未接入'));
     await b(p,'音视频通话').click();assert((await p.locator('.toast').textContent()).includes('尚未接入'));
     await b(p,'发消息').click();await sendText(p,'删除恢复后保留的消息');await textBox(p).fill('未发送草稿');
     await b(p,'返回').click();assert.equal(await p.locator('.person-name').textContent(),'备注人物');
-    await b(p,'联系人资料设置').click();await b(p,'删除人物').click();await b(p,'确认删除').click();
+    await b(p,'返回').click();await b(p,'联系人更多').click();await b(p,'管理剧情人物').click();await b(p,'编辑备注人物').click();await b(p,'删除人物').click();await b(p,'确认删除').click();
     assert((await p.locator('.profile-status').textContent()).includes('未发送草稿'));await b(p,'取消').click();await backContacts(p);await chat(p,'备注人物');assert.equal(await textBox(p).inputValue(),'未发送草稿');await textBox(p).fill('');
     await b(p,'聊天资料').click();await b(p,'删除人物').click();
     const original=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0], history=await histories(p,tt);
@@ -80,10 +82,12 @@ try {
     await b(p,'确认删除').click();await until(async()=> (await p.locator('.profile-status').textContent()).includes('核对'),'deletion failure');
     assert.deepEqual(tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0],original);
     if(tt)await p.evaluate(()=>ttMock.fail=false);else await p.evaluate(()=>Storage.prototype.setItem=originalSet);
-    await b(p,'确认删除').click();await until(()=>b(p,'已删除人物').count(),'deleted');
+    await b(p,'确认删除').click();await until(()=>b(p,'人物管理更多').count(),'deleted');
+    assert.equal(await b(p,'已删除人物').count(),0);assert.equal(await p.locator('.directory-scroll .profile-action').count(),0);
+    const more=await b(p,'人物管理更多').boundingBox(),plus=await b(p,'登记人物').boundingBox();assert(more.x+more.width<=plus.x);
     assert.equal(await p.locator('.contact-row').count(),0);assert.deepEqual(await histories(p,tt),history);
     await p.reload();await open(p);assert.equal(await p.locator('.contact-row').count(),0);await b(p,'消息').click();assert.equal(await p.locator('.contact-row').count(),0);
-    await b(p,'联系人').click();await b(p,'管理剧情人物').click();await b(p,'已删除人物').click();await b(p,'恢复人物：备注人物').click();await b(p,'确认恢复').click();await until(()=>p.getByText('暂无已删除人物',{exact:true}).count(),'restored');
+    await b(p,'联系人').click();await b(p,'联系人更多').click();await b(p,'管理剧情人物').click();await b(p,'人物管理更多').click();await b(p,'已删除人物').click();await b(p,'恢复人物：备注人物').click();await b(p,'确认恢复').click();await until(()=>p.getByText('暂无已删除人物',{exact:true}).count(),'restored');
     const restored=tt ? Object.values(await storage(p,true)).find(v=>v.people) : (await books(p))[0];assert.deepEqual(restored.people,original.people);assert.deepEqual(await histories(p,tt),history);
     await backContacts(p);await chat(p,'备注人物');assert.equal(await bubbles(p).textContent(),'删除恢复后保留的消息');
     if(tt) {

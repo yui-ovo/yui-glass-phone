@@ -19,9 +19,21 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   function toolbar(title, back, action) {
     const bar = el('header', 'toolbar'), b = button('', () => go(back), 'icon-button'); b.setAttribute('aria-label', '返回'); b.innerHTML = icon('back');
     const center = el('div', 'toolbar-title'); center.append(el('h1', '', title));
+    if (action?.classList.contains('toolbar-actions')) bar.classList.add('has-actions');
     bar.append(b, center, action || el('span', 'toolbar-spacer')); return bar;
   }
   function base(title, back = 'home', action) { const wrap = el('div', 'directory-view'), scroll = el('div', 'social-scroll directory-scroll'); wrap.append(toolbar(title, back, action), scroll); return { wrap, scroll }; }
+  function listActions(manage, add) {
+    const actions = el('div', 'toolbar-actions'), more = el('details', 'toolbar-more');
+    const toggle = el('summary', 'icon-button'); toggle.setAttribute('role', 'button');
+    toggle.setAttribute('aria-label', manage ? '人物管理更多' : '联系人更多'); toggle.setAttribute('aria-expanded', 'false'); toggle.innerHTML = icon('more');
+    const menu = el('div', 'toolbar-popover');
+    menu.append(button(manage ? '已删除人物' : '管理剧情人物', () => { more.open = false; go(manage ? 'deleted-people' : 'people'); }, 'toolbar-menu-item'));
+    more.append(toggle, menu); actions.append(more, add);
+    more.addEventListener('toggle', () => toggle.setAttribute('aria-expanded', String(more.open)));
+    actions.addEventListener('keydown', event => { if (event.key === 'Escape' && more.open) { event.preventDefault(); event.stopPropagation(); more.open = false; toggle.focus(); } });
+    return actions;
+  }
   function avatar(person) {
     const span = el('span', 'avatar sage', (person.name || '我').slice(0, 1)); span.setAttribute('aria-hidden', 'true');
     const source = host.avatar(person);
@@ -139,7 +151,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const { wrap, scroll } = base(restore ? '恢复人物' : '删除人物', back);
     if (!person) { empty(scroll, '找不到这个人物，请返回重新选择'); return wrap; }
     scroll.append(avatar(person), el('h2', 'person-name', displayName(person)), el('p', 'profile-meta', `账号：${person.account}`));
-    scroll.append(el('p', 'profile-help', restore ? '恢复原人物、账号、关系和已保存的消息。' : '将从联系人、消息列表和人物管理中移除。资料和已保存消息保留，可在“人物管理 → 已删除人物”恢复。不会删除酒馆角色卡。'));
+    scroll.append(el('p', 'profile-help', restore ? '恢复原人物、账号、关系和已保存的消息。' : '将从联系人、消息列表和人物管理中移除。资料和已保存消息保留，可在“人物管理 → ⋯ → 已删除人物”恢复。不会删除酒馆角色卡。'));
     const status = el('p', 'profile-status'); status.setAttribute('role', 'status');
     let busy = false, active = true;
     const current = () => active && !dead && session === captured && generation === epoch;
@@ -164,9 +176,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   }
   function contactCard() {
     const person = session.book.people.find(p => p.id === selected && !p.deletedAt && p.relation.friend);
-    const edit = () => { lastFormRoute = 'contact-card'; go('details'); };
-    const more = button('', edit, 'icon-button'); more.setAttribute('aria-label', '联系人资料设置'); more.innerHTML = icon('more');
-    const { wrap, scroll } = base('联系人名片', 'contacts', person ? more : undefined);
+    const { wrap, scroll } = base('联系人名片', 'contacts');
     if (!person) { empty(scroll, '此人物已不在好友中，请返回联系人或人物管理'); return wrap; }
     scroll.classList.add('person-card-scroll');
     const hero = el('div', 'person-card-hero'), copy = el('div', 'person-card-copy');
@@ -174,7 +184,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     if (person.remark) copy.append(el('p', 'profile-meta', `名字：${person.name}`));
     copy.append(el('p', 'profile-meta', `账号：${person.account}`)); hero.append(avatar(person), copy); scroll.append(hero);
     const menu = el('div', 'glass-menu');
-    for (const [label, action, glyph] of [['朋友资料', edit, 'contacts'], ['朋友圈', () => notify('朋友圈功能尚未接入'), 'moments']]) {
+    for (const [label, action, glyph] of [['朋友圈', () => notify('朋友圈功能尚未接入'), 'moments']]) {
       const row = button('', action, 'menu-row'); row.setAttribute('aria-label', label); row.append(symbol(glyph), el('span', '', label), symbol('arrow')); menu.append(row);
     }
     const send = button('', () => { chatBack = 'contact-card'; go('chat'); }, 'person-card-action'); send.setAttribute('aria-label', '发消息'); send.append(symbol('message'), el('span', '', '发消息'));
@@ -259,7 +269,9 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }
     const manage = target === 'people', title = manage ? '人物管理' : target === 'messages' ? '消息' : '联系人';
     const add = button('', () => go('add'), 'icon-button'); add.setAttribute('aria-label', '登记人物'); add.innerHTML = icon('plus');
-    const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', target === 'messages' ? undefined : add);
+    const actions = target === 'messages' ? undefined : listActions(manage, add);
+    const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', actions);
+    if (actions) wrap.addEventListener('pointerdown', event => { const more = actions.querySelector('details'); if (!more.contains(event.target)) more.open = false; });
     search(scroll);
     const list = session.book.people.filter(p => !p.deletedAt && (manage || p.relation.friend));
     if (target === 'messages') {
@@ -270,8 +282,6 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     for (const person of list) scroll.append(personRow(person, manage));
     if (!list.length) empty(scroll, manage ? '此存档还没有登记人物' : '此存档暂无好友');
     const noMatch = el('p', 'directory-empty filter-empty', '没有找到相关联系人'); noMatch.hidden = true; scroll.append(noMatch);
-    if (target === 'contacts') scroll.append(button('管理剧情人物', () => go('people')));
-    if (manage) scroll.append(button('已删除人物', () => go('deleted-people')));
     if (!manage) clearMessageView = messenger.subscribe(() => navigate(target, false, true));
     return wrap;
   }

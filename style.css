@@ -995,3 +995,14 @@ h1, h2, p { margin: 0; }
 .person-card-copy .profile-meta { margin: 7px 0 0; }
 .person-card-action { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; color: #d0cadc; font-size: 13px; border-bottom: 1px solid #ffffff09; }
 .person-card-action:last-child { border-bottom: 0; }
+.toolbar.has-actions { display: grid; grid-template-columns: 72px minmax(0,1fr) 72px; }
+.toolbar-actions { display: flex; width: 72px; }
+.toolbar-actions .icon-button { width: 36px; }
+.toolbar-more { position: relative; }
+.toolbar-more > summary { list-style: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.toolbar-more > summary::-webkit-details-marker { display: none; }
+.toolbar-more > summary:focus-visible { outline: 2px solid #c2c8d8; border-radius: 10px; }
+.toolbar-popover { position: absolute; z-index: 12; top: 42px; right: 0; min-width: 144px; padding: 5px; border: 1px solid #ffffff20; border-radius: 13px; background: #33333cee; box-shadow: 0 8px 25px #0005; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.toolbar-menu-item { width: 100%; min-height: 42px; padding: 8px 12px; text-align: left; font-size: 12px; border-radius: 9px; color: #ddd8e5; }
+.toolbar-menu-item:hover, .toolbar-menu-item:focus-visible { background: #ffffff0b; }
+.toolbar.has-actions { position: relative; z-index: 5; }
