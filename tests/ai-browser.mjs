@@ -50,7 +50,7 @@ try {
     if(!tt)await page.screenshot({path:path.join(root,'test-results/ai-settings.png')});
     await home(page);await b(page,'打开消息').click();await b(page,'联系人').click();await b(page,'登记人物').click();await b(page,'从当前角色卡带入').click();
     await page.getByLabel('人物名字',{exact:true}).fill('小晴');await page.getByLabel('线上人设（如有）',{exact:true}).fill('爱用表情');await page.getByLabel('开局关系',{exact:true}).selectOption('friend');
-    await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'添加其他世界书').click();
+    await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'添加其他世界书').click();await b(page,'添加这本世界书').click();
     const habit=page.getByLabel('参考：设定书 · 线上习惯',{exact:true}),branch=page.getByLabel('参考：设定书 · 无关支线',{exact:true});
     await habit.check();await wait(()=>habit.isEnabled(),'habit saved');await branch.check();await wait(()=>branch.isEnabled(),'branch saved');await branch.uncheck();
     await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'),'profile');

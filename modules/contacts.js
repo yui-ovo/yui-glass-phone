@@ -34,6 +34,24 @@ export function validateMaterials(items) {
   }
   if (size > 40000) throw Error('世界书资料总长度超限，已停止保存');
 }
+export function validatePhoneWorldbooks(books) {
+  if (!Array.isArray(books) || books.length > 30) throw Error('最多添加 30 本手机世界书');
+  const worlds = new Set(); let size = 0;
+  for (const book of books) {
+    if (!record(book) || !string(book.world, 500, true) || worlds.has(book.world) || !['current', 'other', 'file'].includes(book.kind)) throw Error('手机世界书列表无效，已停止保存');
+    worlds.add(book.world);
+    if (book.entries !== undefined) {
+      if (book.kind !== 'file' || !Array.isArray(book.entries) || book.entries.length > 500) throw Error('导入世界书目录无效');
+      const ids = new Set();
+      for (const entry of book.entries) {
+        if (!record(entry) || entry.world !== book.world || !string(entry.uid, 100, true) || ids.has(entry.uid) || !string(entry.title, 2000) || !string(entry.content, 20000) || typeof entry.disabled !== 'boolean') throw Error('导入世界书条目无效');
+        ids.add(entry.uid);
+      }
+      size += new TextEncoder().encode(JSON.stringify(book.entries)).length;
+    }
+  }
+  if (size > 2 * 1024 * 1024) throw Error('此人物导入的世界书总量超过 2 MB，请移除不需要的书后重试');
+}
 export function validateBook(book) {
   if (!record(book) || book.version !== 1 || !string(book.id, 128, true) || !Number.isSafeInteger(book.revision) || book.revision < 0 || !Array.isArray(book.people) || book.people.length > 100 || !record(book.self)) throw Error('通讯录格式不支持，已停止写入');
   const ids = new Set(), accounts = new Set();
@@ -56,6 +74,7 @@ export function validateBook(book) {
     if (!record(rel) || ![rel.known, rel.accountKnown, rel.friend].every(x => typeof x === 'boolean') || (rel.friend && (!rel.known || !rel.accountKnown)) || (!rel.known && rel.accountKnown)) throw Error('人物关系不一致');
     validateAvatar(person.avatar);
     if (person.roleplayMaterials !== undefined) validateMaterials(person.roleplayMaterials);
+    if (person.phoneWorldbooks !== undefined) validatePhoneWorldbooks(person.phoneWorldbooks);
     if (person.aiExcludedMaterials !== undefined && (!Array.isArray(person.aiExcludedMaterials) || person.aiExcludedMaterials.length > 20 || !person.aiExcludedMaterials.every(key => typeof key === 'string' && (person.roleplayMaterials || []).some(item => JSON.stringify([item.world, item.uid]) === key)))) throw Error('世界书排除条目格式无效，已停止保存');
   }
   return book;

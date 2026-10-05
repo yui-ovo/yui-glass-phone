@@ -35,20 +35,24 @@ try{
   const originalHost=await page.evaluate(()=>JSON.stringify([profileMock.worlds,profileMock.worldSettings,profileMock.cards]));
   await b(page,'打开消息').click();await b(page,'联系人').click();await b(page,'登记人物').click();await b(page,'从当前角色卡带入').click();
   await page.getByLabel('人物名字',{exact:true}).fill('测试人物');await page.getByLabel('开局关系',{exact:true}).selectOption('friend');
-  await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'当前角色世界书').click();
+  await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();await b(page,'当前角色世界书').click();await b(page,'添加这本世界书').click();
   await wait(()=>check(page,'参考：当前主书 · 人物经历').count(),'current books');
   assert.deepEqual(await page.getByLabel('选择世界书',{exact:true}).locator('option').allTextContents(),['当前主书','当前副书']);
+  assert.equal(await check(page,'参考：当前主书 · 人物经历').isChecked(),false);
+  const group=name=>page.locator('.worldbook-book').filter({has:page.locator('.worldbook-name').getByText(name,{exact:true})});
+  await group('当前主书').locator(':scope > summary').click();assert.equal(await check(page,'参考：当前主书 · 人物经历').isVisible(),false);await group('当前主书').locator(':scope > summary').click();
   await check(page,'参考：当前主书 · 人物经历').check();await wait(()=>check(page,'参考：当前主书 · 人物经历').isEnabled(),'select experience');
   await check(page,'参考：当前主书 · 状态栏').check();await wait(()=>check(page,'参考：当前主书 · 状态栏').isEnabled(),'select status');await check(page,'参考：当前主书 · 状态栏').uncheck();
-  await b(page,'添加其他世界书').click();await wait(()=>check(page,'参考：通用书 · 通用习惯').count(),'unbound');
-  assert.deepEqual(await page.getByLabel('选择世界书',{exact:true}).locator('option').allTextContents(),['通用书']);assert((await page.locator('.worldbook-notice').textContent()).includes('已找到 1 本其他世界书'));await check(page,'参考：通用书 · 通用习惯').check();await wait(()=>check(page,'参考：通用书 · 通用习惯').isEnabled(),'general selected');
-  const file=page.getByLabel('导入世界书文件',{exact:true});await file.setInputFiles(imported);await wait(()=>page.getByRole('checkbox',{name:/线上语气$/}).count(),'file preview');
-  const importedCheck=page.getByRole('checkbox',{name:/线上语气$/});assert.equal(await importedCheck.isChecked(),false);await importedCheck.check();await wait(()=>importedCheck.isEnabled(),'file selected');
+  await b(page,'添加其他世界书').click();await wait(()=>b(page,'添加这本世界书').isEnabled(),'unbound choice');assert.equal(await check(page,'参考：通用书 · 通用习惯').count(),0);await b(page,'添加这本世界书').click();await wait(()=>check(page,'参考：通用书 · 通用习惯').count(),'unbound');
+  assert.deepEqual(await page.getByLabel('选择世界书',{exact:true}).locator('option').allTextContents(),['通用书']);assert((await page.locator('.worldbook-notice').textContent()).includes('世界书已添加'));await check(page,'参考：通用书 · 通用习惯').check();await wait(()=>check(page,'参考：通用书 · 通用习惯').isEnabled(),'general selected');
+  const file=page.getByLabel('导入世界书文件',{exact:true});await file.setInputFiles(imported);await wait(()=>page.getByRole('checkbox',{name:/线上语气$/,includeHidden:true}).count(),'file preview');
+  const importedCheck=page.getByRole('checkbox',{name:/线上语气$/,includeHidden:true});assert.equal(await importedCheck.isChecked(),false);await importedCheck.check();await wait(()=>importedCheck.isEnabled(),'file selected');
   assert.equal(await page.locator('.worldbook-entry img, .worldbook-entry script').count(),0);
   await file.setInputFiles(imported);await wait(()=>file.isEnabled(),'repeat import');assert(await importedCheck.isChecked());assert((await page.locator('.material-summary').textContent()).includes('已选 3 条'));
   assert.equal((await books(page,tt)).length,0,'selection is draft only');
+  await b(page,'当前角色世界书').click();await page.getByLabel('选择世界书',{exact:true}).selectOption('当前副书');await b(page,'添加这本世界书').click();await wait(()=>check(page,'参考：当前副书 · 补充').count(),'empty-selection added book');assert.equal(await check(page,'参考：当前副书 · 补充').isChecked(),false);
   await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'),'saved');
-  const stored=await books(page,tt);assert.equal(stored[0].people[0].roleplayMaterials.length,4);assert.equal(stored[0].people[0].aiExcludedMaterials.length,1);
+  const stored=await books(page,tt);assert.equal(stored[0].people[0].phoneWorldbooks.length,4);assert.equal(stored[0].people[0].roleplayMaterials.length,4);assert.equal(stored[0].people[0].aiExcludedMaterials.length,1);
   const content=await page.evaluate(async book=>{const {replyContext}=await import('/modules/ai.js');return replyContext(window,book,book.people[0]);},stored[0]);assert.equal(content.worldbook.length,3);assert(!JSON.stringify(content).includes('正文状态栏不得发送'));
   if(!tt){await page.getByText('AI 回复参考 · 世界书',{exact:true}).evaluate(node=>node.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(root,'test-results/worldbooks-select.png')});}
   await file.setInputFiles({name:'损坏.json',mimeType:'application/json',buffer:Buffer.from('{')});await wait(async()=> (await page.locator('.profile-status').textContent()).includes('JSON'),'bad JSON');assert.deepEqual(await books(page,tt),stored);
@@ -57,14 +61,25 @@ try{
   await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('草稿仍在此页'),'save failed');assert.equal(await importedCheck.isChecked(),false);assert.deepEqual(await books(page,tt),stored);
   if(tt)await page.evaluate(()=>ttMock.fail=false);else await page.evaluate(()=>Storage.prototype.setItem=originalSet);
   await b(page,'取消').click();await page.reload();await b(page,'打开消息').click();await b(page,'打开聊天：测试人物').click();await b(page,'聊天资料').click();
-  await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();assert(await page.getByRole('checkbox',{name:/线上语气$/}).isChecked());assert.equal(await check(page,'参考：当前主书 · 状态栏').isChecked(),false);
+  await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();assert(await page.getByRole('checkbox',{name:/线上语气$/,includeHidden:true}).isChecked());assert.equal(await page.getByRole('checkbox',{name:/线上语气$/,includeHidden:true}).isVisible(),false);await group('当前主书').locator(':scope > summary').click();await wait(()=>check(page,'参考：当前主书 · 状态栏').count(),'reload host entries');assert.equal(await check(page,'参考：当前主书 · 状态栏').isChecked(),false);
+  await b(page,'添加其他世界书').click();await wait(()=>b(page,'已添加').count(),'dedupe');assert.equal(await b(page,'已添加').isDisabled(),true);
+  await group('通用书').locator(':scope > summary').click();await wait(()=>group('通用书').getByRole('button',{name:'移除世界书：通用书'}).isEnabled(),'ready remove');
+  await b(page,'移除世界书：通用书').click();await b(page,'保留').click();assert.equal(await group('通用书').count(),1);
+  await b(page,'移除世界书：通用书').click();await b(page,'确认移除').click();assert.equal(await group('通用书').count(),0);assert.deepEqual(await books(page,tt),stored,'removal is still draft');
+  await b(page,'取消').click();await b(page,'聊天资料').click();await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();assert.equal(await group('通用书').count(),1);await group('当前主书').locator(':scope > summary').click();await wait(()=>check(page,'参考：当前主书 · 状态栏').count(),'reload after cancel');
   assert.equal(await page.evaluate(()=>JSON.stringify([profileMock.worlds,profileMock.worldSettings,profileMock.cards])),originalHost);
-  await page.evaluate(()=>delete profileMock.cards[1].data.extensions.world);await b(page,'添加其他世界书').click();await wait(async()=> (await page.locator('.profile-help').allTextContents()).some(t=>t.includes('无法确认全部角色绑定')),'unknown bindings');assert(await page.getByLabel('选择世界书',{exact:true}).isHidden());assert.equal(await page.getByText('这本世界书没有条目',{exact:true}).count(),0);assert.equal(await page.locator('.worldbook-results .worldbook-entry').count(),0);
+  await page.evaluate(()=>delete profileMock.cards[1].data.extensions.world);await b(page,'添加其他世界书').click();await wait(async()=> (await page.locator('.profile-help').allTextContents()).some(t=>t.includes('无法确认全部角色绑定')),'unknown bindings');assert(await page.getByLabel('选择世界书',{exact:true}).isHidden());assert.equal(await page.getByText('这本世界书没有条目',{exact:true}).count(),0);assert.equal(await page.locator('.worldbook-book').count(),4,'failed listing preserves added books');
   assert(!(await page.evaluate(()=>profileMock.reads)).some(name=>name.startsWith('其他')));
-  await page.evaluate(()=>{profileMock.cards[1].data.extensions.world='其他主书';profileMock.delay=true;});await b(page,'当前角色世界书').click();await page.waitForFunction(()=>!!profileMock.release);await page.evaluate(()=>profileMock.switch('1','new-chat'));await page.evaluate(()=>{profileMock.delay=false;profileMock.release();});await wait(()=>b(page,'登记人物').count(),'switched');assert.equal(await page.locator('.worldbook-entry').count(),0);assert.deepEqual(await books(page,tt),stored);
+  await page.evaluate(()=>{profileMock.cards[1].data.extensions.world='其他主书';profileMock.delay=true;});await group('当前主书').getByRole('button',{name:'读取条目',exact:true}).click();await page.waitForFunction(()=>!!profileMock.release);await page.evaluate(()=>profileMock.switch('1','new-chat'));await page.evaluate(()=>{profileMock.delay=false;profileMock.release();});await wait(()=>b(page,'登记人物').count(),'switched');assert.equal(await page.locator('.worldbook-entry').count(),0);assert.deepEqual(await books(page,tt),stored);
   await page.reload();await b(page,'打开消息').click();await b(page,'打开聊天：测试人物').click();await b(page,'聊天资料').click();await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();
   await page.evaluate(()=>{const original=File.prototype.text;File.prototype.text=async function(){await new Promise(r=>profileMock.releaseFile=r);return original.call(this);};});
   await page.getByLabel('导入世界书文件',{exact:true}).setInputFiles(imported);await page.waitForFunction(()=>!!profileMock.releaseFile);await page.evaluate(()=>profileMock.switch('1','file-switch'));await page.evaluate(()=>profileMock.releaseFile());await wait(()=>b(page,'登记人物').count(),'file switched');assert.equal(await page.locator('.worldbook-entry').count(),0);assert.deepEqual(await books(page,tt),stored);
+  await page.reload();await b(page,'打开消息').click();await b(page,'打开聊天：测试人物').click();await b(page,'聊天资料').click();await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();
+  assert.equal(await group('当前副书').count(),1,'book with zero selections persists');
+  await group('通用书').locator(':scope > summary').click();await wait(()=>b(page,'移除世界书：通用书').isEnabled(),'remove saved');await b(page,'移除世界书：通用书').click();await b(page,'确认移除').click();await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'),'removed saved');
+  const removed=await books(page,tt);assert(!removed[0].people[0].phoneWorldbooks.some(x=>x.world==='通用书'));assert(!removed[0].people[0].roleplayMaterials.some(x=>x.world==='通用书'));assert.equal(removed[0].people[0].roleplayMaterials.length,3);
+  await page.reload();await b(page,'打开消息').click();await b(page,'打开聊天：测试人物').click();await b(page,'聊天资料').click();await page.getByText('AI 回复参考 · 世界书',{exact:true}).click();assert.equal(await group('通用书').count(),0);assert.equal(await group('当前副书').count(),1);
   assert.deepEqual(errors,[]);console.log('PASS '+(tt?'TT':'ST')+' worldbooks: primary/auxiliary filtering, direct exclusion, import/repeat/invalid, cancel/failed save, refresh, host unchanged, shallow unknown, late switch');await context.close();
  }
 }finally{await browser.close();server.close();}
+

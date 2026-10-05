@@ -1,4 +1,4 @@
-import { record } from './contacts.js';
+import { record, clone, validatePhoneWorldbooks } from './contacts.js';
 import { worldNames } from './ai.js';
 
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -88,3 +88,25 @@ export async function importWorldbook(win, file) {
 }
 
 export const worldbookLabel = world => world.replace(/ · ([a-f0-9]{64})$/, (_, hash) => ` · ${hash.slice(0, 6)}`);
+
+// Legacy selections remain visible without changing their snapshots or exclusions.
+export function phoneWorldbooks(person) {
+  const books = clone(person.phoneWorldbooks || []);
+  for (const item of person.roleplayMaterials || []) {
+    if (!books.some(book => book.world === item.world)) books.push({ world: item.world, kind: /^导入 · .* · [a-f0-9]{64}$/.test(item.world) ? 'file' : 'other' });
+  }
+  validatePhoneWorldbooks(books); return books;
+}
+export function addPhoneWorldbook(person, book) {
+  const books = phoneWorldbooks(person), index = books.findIndex(item => item.world === book.world);
+  if (index < 0) books.push(clone(book));
+  else if (book.entries && !books[index].entries) books[index] = clone(book);
+  validatePhoneWorldbooks(books); person.phoneWorldbooks = books;
+}
+export function removePhoneWorldbook(person, world) {
+  const books = phoneWorldbooks(person).filter(book => book.world !== world);
+  const materials = (person.roleplayMaterials || []).filter(item => item.world !== world);
+  const keys = new Set(materials.map(item => JSON.stringify([item.world, item.uid])));
+  person.phoneWorldbooks = books; person.roleplayMaterials = materials;
+  person.aiExcludedMaterials = (person.aiExcludedMaterials || []).filter(key => keys.has(key));
+}

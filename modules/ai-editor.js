@@ -1,5 +1,5 @@
 import { clone, sameJson, validateMaterials } from './contacts.js';
-import { worldbookChoices, importWorldbook, worldbookLabel } from './worldbooks.js';
+import { worldbookChoices, importWorldbook, worldbookLabel, phoneWorldbooks, addPhoneWorldbook, removePhoneWorldbook } from './worldbooks.js';
 import { AI_KEY, DEFAULT_PROMPT, defaultConfig, readConfig, saveConfig, apiRequest, currentPersona, materialKey, worldEntries, materialSnapshot } from './ai.js';
 
 export function apiSettings({ win, base, el, button }) {
@@ -51,17 +51,22 @@ export function apiSettings({ win, base, el, button }) {
   return { wrap, editor: { saving: () => false, dirty: () => !!task || !sameJson(draft, baseline), suspend() { task?.abort(); }, dispose() { active = false; task?.abort(); } } };
 }
 
-// Selection only changes this person's saved snapshots and exclusions.
+// Books are added independently of the snapshots selected for AI replies.
 export function materialEditor({ win, scroll, draft, el, button, current, status }) {
-  let active = true, busy = false, ticket = 0, displayed = [], mode = '';
-  const section = el('details', 'profile-trace'), saved = el('div'), results = el('div', 'worldbook-results');
+  let active = true, busy = false, ticket = 0, mode = '';
+  const cache = new Map(), opened = new Set(), loaded = new Set();
+  const section = el('details', 'profile-trace'), saved = el('div', 'worldbook-results');
   const summary = el('p', 'material-summary'), notice = el('p', 'profile-help worldbook-notice'); notice.setAttribute('role', 'status');
-  const choices = el('div', 'worldbook-sources'), books = el('select', 'worldbook-select'); books.hidden = true; books.setAttribute('aria-label', '选择世界书');
+  const choices = el('div', 'worldbook-sources'), picker = el('div', 'worldbook-picker'); picker.hidden = true;
+  const books = el('select', 'worldbook-select'); books.setAttribute('aria-label', '选择世界书');
+  const add = button('添加这本世界书', () => void addSelected(), 'worldbook-source');
+  picker.append(books, add);
   const file = el('input', 'worldbook-file'); file.type = 'file'; file.accept = '.json,application/json'; file.hidden = true; file.setAttribute('aria-label', '导入世界书文件');
   const isCurrent = () => active && current();
   const selectedItem = entry => (draft.roleplayMaterials || []).find(item => materialKey(item) === materialKey(entry));
   const included = entry => !!selectedItem(entry) && !(draft.aiExcludedMaterials || []).includes(materialKey(entry));
-  section.append(el('summary', '', 'AI 回复参考 · 世界书'), el('p', 'profile-help', '只把勾选条目用于此人物的手机回复，保存人物后生效。正文世界书不受影响；已添加的内容保留快照。'));
+  const changed = message => { status.textContent = message + '，保存人物后生效'; notice.textContent = status.textContent; };
+  section.append(el('summary', '', 'AI 回复参考 · 世界书'), el('p', 'profile-help', '先添加世界书，再展开勾选用于手机回复的条目。保存人物后生效；移除只影响此人物的小手机参考，酒馆原书不变。'));
   function refresh() {
     const selected = (draft.roleplayMaterials || []).filter(included);
     summary.textContent = '已选 ' + selected.length + ' 条 · 共 ' + selected.reduce((n, item) => n + item.content.length, 0) + ' 字';
@@ -69,8 +74,13 @@ export function materialEditor({ win, scroll, draft, el, button, current, status
       const item = (draft.roleplayMaterials || []).find(item => materialKey(item) === check.dataset.materialKey);
       check.checked = !!item && included(item); check.disabled = busy || check.dataset.empty === 'true';
     }
-    for (const control of choices.querySelectorAll('button')) control.disabled = busy;
-    books.disabled = busy; file.disabled = busy;
+    for (const control of section.querySelectorAll('button,select,input[type=file]')) control.disabled = busy;
+    for (const count of saved.querySelectorAll('[data-world-count]')) {
+      const world = count.dataset.worldCount;
+      count.textContent = '已选 ' + selected.filter(item => item.world === world).length + ' 条';
+    }
+    const exists = books.value && phoneWorldbooks(draft).some(book => book.world === books.value);
+    add.textContent = exists ? '已添加' : '添加这本世界书'; add.disabled = busy || !books.value || exists;
   }
   async function work(fn) {
     if (busy || !isCurrent()) return;
@@ -97,57 +107,90 @@ export function materialEditor({ win, scroll, draft, el, button, current, status
         if (!valid() || !linked) return;
         const key = materialKey(linked), excluded = new Set(draft.aiExcludedMaterials || []);
         wanted ? excluded.delete(key) : excluded.add(key); draft.aiExcludedMaterials = [...excluded];
-        status.textContent = '参考资料已修改，保存人物后生效'; notice.textContent = status.textContent;
+        changed('参考条目已修改');
       });
     };
     line.append(check, detail); return line;
   }
-  function renderSaved() {
+  function renderBooks() {
     saved.replaceChildren();
-    const visible = new Set(displayed.map(materialKey)), items = (draft.roleplayMaterials || []).filter(item => !visible.has(materialKey(item)));
-    if (items.length) {
-      const group = el('details', 'worldbook-saved'); group.open = true; group.append(el('summary', '', '已添加的参考'));
-      let world;
-      for (const item of items) { if (item.world !== world) { world = item.world; group.append(el('p', 'profile-help', worldbookLabel(world))); } group.append(row(item)); }
+    const list = phoneWorldbooks(draft);
+    if (!list.length) saved.append(el('p', 'profile-help', '尚未添加世界书'));
+    for (const book of list) {
+      const group = el('details', 'worldbook-book'); group.dataset.world = book.world; group.open = opened.has(book.world);
+      const head = el('summary', 'worldbook-heading'), count = el('span', 'worldbook-count'); count.dataset.worldCount = book.world;
+      head.append(el('span', 'worldbook-name', worldbookLabel(book.world)), count); group.append(head);
+      const content = el('div', 'worldbook-book-content');
+      const entries = [...(cache.get(book.world) || book.entries || [])];
+      const keys = new Set(entries.map(materialKey));
+      for (const item of draft.roleplayMaterials || []) if (item.world === book.world && !keys.has(materialKey(item))) entries.push(item);
+      const tools = el('div', 'worldbook-book-tools');
+      if (book.kind !== 'file') tools.append(button('读取条目', () => void readBook(book), 'worldbook-source'));
+      const remove = button('移除', () => { if (!busy && isCurrent()) { confirm.hidden = false; remove.hidden = true; } }, 'worldbook-remove'); remove.setAttribute('aria-label', '移除世界书：' + worldbookLabel(book.world));
+      const confirm = el('div', 'worldbook-remove-confirm'); confirm.hidden = true;
+      confirm.append(el('p', 'profile-help', '从此人物的手机参考中移除整本书及已选条目？'), button('确认移除', () => {
+        if (busy || !isCurrent()) return;
+        removePhoneWorldbook(draft, book.world); opened.delete(book.world); cache.delete(book.world); loaded.delete(book.world);
+        changed('世界书已移除'); renderBooks();
+      }, 'worldbook-source'), button('保留', () => { confirm.hidden = true; remove.hidden = false; }, 'worldbook-source'));
+      tools.append(remove); content.append(tools, confirm);
+      if (book.kind === 'file' && !book.entries) content.append(el('p', 'profile-help', '旧资料只保留已选快照，重新导入同一文件可补齐其他条目。'));
+      if (!entries.length) content.append(el('p', 'profile-help', loaded.has(book.world) || book.entries ? '这本世界书没有条目' : '展开后读取条目；读取失败时保留已有资料。'));
+      for (const entry of entries) content.append(row(entry));
+      group.append(content);
+      group.ontoggle = () => {
+        if (!isCurrent() || !group.isConnected) return;
+        group.open ? opened.add(book.world) : opened.delete(book.world);
+        if (group.open && book.kind !== 'file' && !loaded.has(book.world) && !busy) void readBook(book);
+      };
       saved.append(group);
     }
+    refresh();
   }
-  function showEntries(entries, emptyMessage = '这本世界书没有条目') {
-    displayed = entries; results.replaceChildren();
-    if (entries.length) { results.append(el('p', 'profile-help', worldbookLabel(entries[0].world))); for (const entry of entries) results.append(row(entry)); }
-    else if (emptyMessage) results.append(el('p', 'profile-help', emptyMessage));
-    renderSaved(); refresh();
-  }
-  function fillBooks(names) {
-    books.replaceChildren(); for (const name of names) { const option = el('option', '', name); option.value = name; books.append(option); } books.hidden = !names.length;
+  async function readBook(book) {
+    await work(async valid => {
+      notice.textContent = '正在读取世界书条目…';
+      const available = await worldbookChoices(win); if (!valid()) return;
+      if (![...available.current, ...available.unbound].includes(book.world)) throw Error(available.warning || '此书已不可用或绑定其他角色；已选快照保留，可移除关联');
+      const entries = await worldEntries(win, book.world); if (!valid()) return;
+      cache.set(book.world, entries); loaded.add(book.world); renderBooks(); notice.textContent = '条目已读取，请勾选需要的内容。原有快照保持不变。';
+    });
   }
   function browse(kind) {
     void work(async valid => {
-      fillBooks([]); showEntries([], ''); notice.textContent = '正在核对世界书绑定…'; const available = await worldbookChoices(win); if (!valid()) return;
-      mode = kind; const names = available[kind]; fillBooks(names);
-      notice.textContent = available.warning || (names.length ? '已找到 ' + names.length + ' 本' + (kind === 'current' ? '当前角色世界书' : '其他世界书') + '，可选择书名并勾选条目。' : kind === 'current' ? '当前角色没有已确认的绑定世界书' : '没有可添加的其他世界书（已排除角色绑定）');
-      if (names.length) { const entries = await worldEntries(win, names[0]); if (valid()) showEntries(entries); }
+      picker.hidden = true; books.replaceChildren(); notice.textContent = '正在核对世界书绑定…';
+      const available = await worldbookChoices(win); if (!valid()) return;
+      mode = kind; const names = available[kind];
+      for (const name of names) { const option = el('option', '', name); option.value = name; books.append(option); }
+      picker.hidden = !names.length;
+      notice.textContent = available.warning || (names.length ? '已找到 ' + names.length + ' 本' + (kind === 'current' ? '当前角色世界书' : '其他世界书') + '，选择后点击添加。' : '没有可添加的世界书');
     });
   }
-  books.onchange = () => {
+  async function addSelected() {
     const name = books.value, kind = mode;
-    void work(async valid => {
-      showEntries([], ''); notice.textContent = '正在读取所选世界书…'; const available = await worldbookChoices(win); if (!valid()) return;
-      if (!available[kind]?.includes(name)) { fillBooks([]); throw Error(available.warning || '这本书的绑定已变化，请重新选择'); }
-      const entries = await worldEntries(win, name); if (valid()) { showEntries(entries); notice.textContent = '已读取条目，勾选后保存人物即可。'; }
+    await work(async valid => {
+      const available = await worldbookChoices(win); if (!valid()) return;
+      if (!available[kind]?.includes(name)) throw Error(available.warning || '这本书的绑定已变化，请重新选择');
+      notice.textContent = '正在添加世界书…';
+      const entries = await worldEntries(win, name); if (!valid()) return;
+      addPhoneWorldbook(draft, { world: name, kind: kind === 'current' ? 'current' : 'other' });
+      cache.set(name, entries); loaded.add(name); opened.add(name); picker.hidden = true;
+      renderBooks(); changed('世界书已添加，请展开勾选条目');
     });
-  };
+  }
+  books.onchange = refresh;
   file.onchange = () => {
     const picked = file.files?.[0]; file.value = ''; if (!picked) return;
     void work(async valid => {
       notice.textContent = '正在读取文件…'; const entries = await importWorldbook(win, picked); if (!valid()) return;
-      mode = 'file'; fillBooks([]); showEntries(entries);
-      notice.textContent = '文件已预览。勾选后保存人物，只保存所选内容；不会安装到酒馆或自动启用条目。';
+      const world = entries[0].world;
+      addPhoneWorldbook(draft, { world, kind: 'file', entries }); opened.add(world); picker.hidden = true;
+      renderBooks(); changed('文件已添加，请勾选条目');
     });
   };
   choices.append(button('当前角色世界书', () => browse('current'), 'worldbook-source'), button('添加其他世界书', () => browse('unbound'), 'worldbook-source'), button('导入文件', () => file.click(), 'worldbook-source'));
-  section.append(summary, choices, file, notice, books, results, saved, el('p', 'profile-help', '最多保留 20 条、共 4 万字；导入文件最多 2 MB、500 条。取消勾选保留原快照，不计入本次回复字数。'));
-  scroll.append(section); renderSaved(); refresh();
+  section.append(summary, choices, file, notice, picker, saved, el('p', 'profile-help', '最多添加 30 本书；参考快照最多 20 条、共 4 万字。未勾选条目不发送给 AI。导入文件共限 2 MB，酒馆书的未选正文不复制保存。'));
+  scroll.append(section); renderBooks();
   return { busy: () => busy, dispose() { active = false; ticket++; } };
 }
 

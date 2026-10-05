@@ -1,8 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyWorldbooks, parseWorldbookFile, importWorldbook, MAX_IMPORT_BYTES } from '../modules/worldbooks.js';
+import { classifyWorldbooks, parseWorldbookFile, importWorldbook, MAX_IMPORT_BYTES, phoneWorldbooks, addPhoneWorldbook, removePhoneWorldbook } from '../modules/worldbooks.js';
 import { materialSnapshot, replyContext, materialKey } from '../modules/ai.js';
-import { newPerson, newBook, clone, validateBook } from '../modules/contacts.js';
+import { newPerson, newBook, clone, validateBook, validatePhoneWorldbooks } from '../modules/contacts.js';
+
+test('adding books is independent of AI selection; legacy snapshots survive and repeat adds are idempotent', async () => {
+  const p=newPerson(undefined,'人物'), b=newBook();b.people.push(p);
+  p.roleplayMaterials=[await materialSnapshot({crypto},{world:'旧书',uid:'1',title:'旧条目',content:'保留'})];
+  p.aiExcludedMaterials=[materialKey(p.roleplayMaterials[0])];const original=clone(p);
+  assert.deepEqual(phoneWorldbooks(p),[{world:'旧书',kind:'other'}]);assert.deepEqual(p,original);
+  addPhoneWorldbook(p,{world:'新书',kind:'other'});addPhoneWorldbook(p,{world:'新书',kind:'other'});
+  assert.equal(p.phoneWorldbooks.length,2);assert.deepEqual(p.roleplayMaterials,original.roleplayMaterials);assert.deepEqual(p.aiExcludedMaterials,original.aiExcludedMaterials);validateBook(b);
+  const win={SillyTavern:{getContext:()=>({name1:'我',powerUserSettings:{persona_description:''}})}};assert.equal(replyContext(win,b,p).worldbook.length,0);
+});
+
+test('removing a whole book drops only its snapshots/exclusions, preserves other data, and never restores it from legacy inference', async () => {
+  const p=newPerson(undefined,'人物');p.future={keep:true};
+  p.roleplayMaterials=await Promise.all(['A','B'].map(world=>materialSnapshot({crypto},{world,uid:'1',title:'同条目ID',content:'保留'})));
+  p.aiExcludedMaterials=p.roleplayMaterials.map(materialKey);const old=clone(p.roleplayMaterials[1]);
+  removePhoneWorldbook(p,'A');assert.deepEqual(p.roleplayMaterials,[old]);assert.deepEqual(p.aiExcludedMaterials,[materialKey(old)]);assert.deepEqual(phoneWorldbooks(p),[{world:'B',kind:'other'}]);assert.deepEqual(p.future,{keep:true});
+});
+
+test('imported book keeps unchecked catalog for later selection; invalid catalog or quota fails before mutation', () => {
+  const p=newPerson(undefined,'人物'),entry={world:'导入',uid:'1',title:'<script>',content:'尚未勾选',disabled:false};
+  addPhoneWorldbook(p,{world:'导入',kind:'file',entries:[entry]});assert.equal(p.roleplayMaterials,undefined);assert.deepEqual(phoneWorldbooks(p)[0].entries,[entry]);
+  const before=clone(p);assert.throws(()=>addPhoneWorldbook(p,{world:'坏书',kind:'file',entries:[entry]}));assert.deepEqual(p,before);
+  assert.throws(()=>validatePhoneWorldbooks([{world:'a',kind:'other',entries:[]}]));
+  assert.throws(()=>validatePhoneWorldbooks([{world:'导入',kind:'file',entries:Array.from({length:120},(_,i)=>({...entry,uid:String(i),content:'字'.repeat(20000)}))}]));
+  assert.throws(()=>validatePhoneWorldbooks(Array.from({length:31},(_,i)=>({world:String(i),kind:'other'}))));
+});
 
 const card = (avatar, world = '') => ({ avatar, data: { extensions: { world } } });
 const fixture = () => ({ characterId: '42', characters: { 42: card('now.png', '当前主书'), 7: card('other.png', '其他主书') } });
@@ -63,3 +89,4 @@ test('repeat file import has stable identity; different same-named content canno
   assert.equal(replyContext(win,book,person).worldbook.length,1);assert(!JSON.stringify(replyContext(win,book,person)).includes('正文状态栏'));
   assert.deepEqual(person.roleplayMaterials,before);assert.deepEqual(person.futureField,{keep:true});
 });
+
