@@ -1,56 +1,66 @@
 import { createMessageStore } from './message-host.js';
-import { phoneStoryReference } from './story-context.js';
-import { formatPhoneReference } from './reference-format.js';
-
+import { pendingSupplement, formatSupplement, validateSupplementSize, digest, SUPPLEMENT_KEY } from './supplement.js';
+import { captureSupplementHost, supplementSupported } from './supplement-host.js';
+import { decorateSupplements } from './supplement-view.js';
+import { sameJson } from './contacts.js';
 export const STORY_PROMPT_KEY='yui-glass-phone.story-reference.v1';
+export const SUPPLEMENT_INTERCEPTOR='yuiPhoneSupplementInterceptorV1';
+export const storyBridgeSupported=supplementSupported;
 const instances=new WeakMap();
-export function storyBridgeSupported(win){
-  const c=win.SillyTavern?.getContext();
-  return !!(c?.setExtensionPrompt && c.eventSource?.on && c.eventSource?.removeListener && c.eventTypes?.GENERATION_AFTER_COMMANDS && c.eventTypes?.GENERATION_STARTED && c.eventTypes?.GENERATION_ENDED && c.eventTypes?.GENERATION_STOPPED && c.eventTypes?.CHAT_CHANGED);
-}
 export function createStoryBridge(win,profiles,notify=()=>{}) {
-  instances.get(win)?.dispose();
-  let dead=false,epoch=0,controller,record;const removers=[];
+  instances.get(win)?.dispose();let dead=false,epoch=0,controller=new AbortController(),pending=null,blocked='',busy=false;const removers=[];
   const context=()=>win.SillyTavern?.getContext();
-  function clear(){
-    epoch++;controller?.abort();controller=undefined;record=undefined;
-    const ctx=context();
-    if(ctx?.extensionPrompts)delete ctx.extensionPrompts[STORY_PROMPT_KEY];
-    else ctx?.setExtensionPrompt?.(STORY_PROMPT_KEY,'',1,0,false,0);
-  }
-  clear();
-  async function prepare(type,options={},dryRun=false){
-    clear();if(dead || dryRun || (typeof profiles.valid==='function' && !profiles.valid()) || ![undefined,'normal','continue','swipe','regenerate'].includes(type) || options.quiet_prompt || options.agentResume)return;
-    const ticket=epoch;controller=new AbortController();const signal=controller.signal;
-    const abort=()=>clear();options.signal?.addEventListener('abort',abort,{once:true});
+  function removeLegacy(){const ctx=context();if(ctx?.extensionPrompts)delete ctx.extensionPrompts[STORY_PROMPT_KEY];}
+  const tell=message=>{notify(message);win.toastr?.warning?.(message,'手机补记');};
+  function invalidate(){removeLegacy();}
+  function switchChat(){epoch++;controller.abort();controller=new AbortController();pending=null;blocked='';removeLegacy();}
+  async function retry(){
+    if(!pending||busy)return;busy=true;const operation=pending,ticket=epoch;
     try{
-      if(options.signal?.aborted)return;
-      const session=await profiles.load(signal);if(dead || signal.aborted || ticket!==epoch || !session)return;
-      if(!session.book.people.some(p=>!p.deletedAt && p.relation.friend && p.storyContext?.sharePhone))return;
-      const store=createMessageStore(win,profiles,session,signal),history=await store.read();
-      profiles.assertSession(session,signal);if(dead || ticket!==epoch)return;
-      const data=phoneStoryReference(session.book,history);if(!data.length)return;
-      const raw=JSON.stringify(data);
-      const value=formatPhoneReference(data);
-      const ctx=context();
-      // ST/TT IN_CHAT=1, depth=0, SYSTEM=0; scan=false excludes WI activation.
-      ctx.setExtensionPrompt(STORY_PROMPT_KEY,value,1,0,false,0,async()=>{
-        if(dead || ticket!==epoch || signal.aborted || options.signal?.aborted)return false;
-        try{
-          profiles.assertSession(session,signal);
-          const fresh=await profiles.load(signal),now=await store.read();
-          return !dead && ticket===epoch && !signal.aborted && fresh.book.id===session.book.id && fresh.account===session.account && JSON.stringify(phoneStoryReference(fresh.book,now))===raw;
-        }catch{return false;}
-      });
-      record={archiveId:session.book.id,conversations:data};
-    }catch(e){if(!dead && ticket===epoch && !signal.aborted){clear();notify('本次未加入手机剧情参考：'+e.message);}}
-    finally{options.signal?.removeEventListener('abort',abort);}
+      // A failed generation may already have appended the user's own message.
+      // Capture again, retaining that message, but never retarget a different AI floor.
+      const host=captureSupplementHost(win,operation.session,profiles,controller.signal);
+      if(host.target!==operation.host.target||host.index!==operation.host.index||(!sameJson(host.before,operation.host.before)&&!sameJson(host.before,operation.next)))throw Error('待核对的正文已被修改或切换，请重新加载存档核对补记');
+      await host.commit(operation.next);if(dead||ticket!==epoch)return;
+      pending=null;blocked='';
+      // Refresh only the display; do not emit MESSAGE_EDITED and trigger a second summary.
+      const ctx=context();if(ctx.updateMessageBlock)ctx.updateMessageBlock(host.index,host.target);
+      decorateSupplements(win);notify('手机补记已保存到上一条 AI 正文');
+    }catch(e){if(!dead&&ticket===epoch){blocked=e.message;context()?.stopGeneration?.();tell(blocked);}}
+    finally{busy=false;}
   }
-  if(storyBridgeSupported(win)){
-    const ctx=context(),listen=(name,fn)=>{const event=ctx.eventTypes[name];if(event){ctx.eventSource.on(event,fn);removers.push(()=>ctx.eventSource.removeListener(event,fn));}};
+  async function prepare(type,options={},dryRun=false){
+    removeLegacy();if(dead||dryRun||![undefined,'normal'].includes(type)||options.quiet_prompt||options.agentResume||options.automatic_trigger)return;
+    if(busy){blocked='手机补记正在保存，请稍后重试';context()?.stopGeneration?.();return;}
+    if(pending){await retry();if(pending)return;}
+    blocked='';const ticket=epoch,signal=controller.signal;
+    try{
+      if(typeof profiles.valid==='function'&&!profiles.valid())return;
+      const session=await profiles.load(signal);if(dead||ticket!==epoch||!session.book.storySync?.enabled)return;
+      if(!session.book.people.some(p=>!p.deletedAt&&p.relation.friend&&p.storyContext?.sharePhone))return;
+      if(!supplementSupported(win))throw Error('当前宿主不支持补记保存，请关闭补记开关后继续');
+      const history=await createMessageStore(win,profiles,session,signal).read();profiles.assertSession(session,signal);if(dead||ticket!==epoch)return;
+      const rows=(await pendingSupplement(win,session.book,history,context().chat)).filter(r=>!r.excluded);
+      profiles.assertSession(session,signal);if(dead||ticket!==epoch)return;validateSupplementSize(session.book,rows);if(!rows.length)return;
+      const host=captureSupplementHost(win,session,profiles,signal),batchId=win.crypto.randomUUID(),block=formatSupplement(batchId,rows);
+      const receipt={version:1,archiveId:session.book.id,batchId,sourceIds:rows.map(r=>r.id),hash:await digest(win,block)};
+      host.guard();pending={host,session,next:host.next(block,receipt)};await retry();
+    }catch(e){if(!dead&&ticket===epoch){blocked=e.message;context()?.stopGeneration?.();tell('本次正文暂停：'+blocked);}}
+  }
+  const intercept=async(chat,_size,abort,type)=>{
+    if(dead||type==='quiet'||type==='impersonate')return;
+    if(pending||busy||blocked){abort(true);tell('手机补记尚未确认：'+(blocked||'请稍后重试'));return;}
+    if(![undefined,'normal'].includes(type))return;
+    const latest=context()?.chat?.findLast(m=>m?.is_user===false),receipts=latest?.extra?.[SUPPLEMENT_KEY]?.batches||[];
+    if(receipts.some(r=>!chat.some(m=>m.mes?.includes(`【Yui手机交流补记 ${r.batchId}】`)))){abort(true);tell('正文输入未包含手机补记，请检查隐藏楼层、输入正则及上下文范围');}
+  };
+  win[SUPPLEMENT_INTERCEPTOR]=intercept;removeLegacy();
+  const ctx=context();if(ctx?.eventSource?.on){const listen=(name,fn)=>{const event=ctx.eventTypes?.[name];if(event){ctx.eventSource.on(event,fn);removers.push(()=>ctx.eventSource.removeListener(event,fn));}};
     listen('GENERATION_AFTER_COMMANDS',prepare);
-    for(const name of ['GENERATION_STARTED','GENERATION_ENDED','GENERATION_STOPPED','CHAT_CHANGED','CHAT_RENAMED','CHAT_DELETED','MESSAGE_SWIPED','MESSAGE_EDITED','MESSAGE_DELETED'])listen(name,clear);
+    for(const name of ['CHAT_CHANGED','CHAT_RENAMED','CHAT_DELETED'])listen(name,switchChat);
+    for(const name of ['CHARACTER_MESSAGE_RENDERED','CHAT_CHANGED','MESSAGE_UPDATED'])listen(name,()=>decorateSupplements(win));
   }
-  const bridge={invalidate:clear,last:()=>record,dispose(){if(dead)return;dead=true;clear();removers.forEach(fn=>fn());if(instances.get(win)===bridge)instances.delete(win);}};
-  instances.set(win,bridge);return bridge;
+  decorateSupplements(win);
+  const api={invalidate,retry,status:()=>({busy,error:blocked,pending:!!pending}),last:()=>null,dispose(){dead=true;switchChat();removers.forEach(fn=>fn());if(win[SUPPLEMENT_INTERCEPTOR]===intercept)delete win[SUPPLEMENT_INTERCEPTOR];if(instances.get(win)===api)instances.delete(win);}};
+  instances.set(win,api);return api;
 }

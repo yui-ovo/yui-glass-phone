@@ -6,6 +6,7 @@ import { kindOf, parseReply, stickerPayload, transferPayload } from './rich-mess
 import { createStickerLibrary } from './stickers.js';
 import { sameJson } from './contacts.js';
 import { readConfig, replyContext, apiRequest } from './ai.js';
+import { stampStoryTime } from './phone-clock.js';
 
 // In-memory drafts are scoped to the active archive; only confirmed records enter history.
 export function createMessenger(win, profiles) {
@@ -103,10 +104,11 @@ export function createMessenger(win, profiles) {
         const currentAssets = win.indexedDB ? await library.available(captured.book.id, id) : []; if (!current()) return;
         for (const m of parsed.messages) if (m.kind === 'sticker' && !currentAssets.some(a => a.id === m.sticker.assetId && a.allowedAI && !a.hidden && a.description === m.sticker.description)) throw Error('表情包授权或描述已变化，本次回复未保存');
         const delivery = createDelivery(history, id, parsed.messages, parsed.settlements, true);
+        delivery.messages.forEach(m=>stampStoryTime(win,fresh.book,m));
         // Validate before showing a pending operation. Invalid AI output cannot poison retries.
         applyDelivery(history, delivery, await changeFingerprint(delivery)); if (!current()) return;
         state.operation = { delivery, message: delivery.messages[0], busy: false, error: '' };
-      } else state.operation = { message: createReply(history.archiveId, id, parsed.messages[0].text, (history.messages.at(-1)?.sequence || 0) + 1), revision: history.revision, busy: false, error: '' };
+      } else state.operation = { message: stampStoryTime(win,fresh.book,createReply(history.archiveId, id, parsed.messages[0].text, (history.messages.at(-1)?.sequence || 0) + 1)), revision: history.revision, busy: false, error: '' };
       if(win.localStorage.getItem(PRESETS_KEY)!==presetState.raw){state.operation=null;throw Error('聊天预设已变化，本次回复未保存，请重新请求');}
       job = undefined;
       await execute(id); // Saving retries reuse this reply, never call AI again.
@@ -117,6 +119,7 @@ export function createMessenger(win, profiles) {
     ensureMutable(); if (job) throw Error('请先停止正在生成的回复');
     const state = draft(id); if (state.editing) throw Error('请先处理文字编辑');
     const delivery = createDelivery(history, id, payloads, settlements);
+    delivery.messages.forEach(m=>stampStoryTime(win,session.book,m));
     state.operation = { delivery, message: delivery.messages[0], clearAttachment, busy: false, error: '' }; void execute(id);
   }
   return {
@@ -144,7 +147,7 @@ export function createMessenger(win, profiles) {
     input(id, text) { const state = draft(id); state.text = text; state.edit++; },
     submit(id) {
       const state = draft(id); if (!history || reading || state.operation || job || change || state.editing) return;
-      const message = createMessage(history.archiveId, id, state.text, (history.messages.at(-1)?.sequence || 0) + 1);
+      const message = stampStoryTime(win,session.book,createMessage(history.archiveId, id, state.text, (history.messages.at(-1)?.sequence || 0) + 1));
       if (state.quoteId) message.replyTo = state.quoteId;
       state.operation = { message, revision: history.revision, edit: state.edit, busy: false, error: '' };
       void execute(id);

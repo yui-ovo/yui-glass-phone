@@ -10,6 +10,8 @@ import { currentPersona } from './ai.js';
 import { storyEditor } from './story-editor.js';
 import { memoryEditor } from './memory-editor.js';
 import { createStoryBridge } from './story-bridge.js';
+import { storySettings } from './story-settings.js';
+import { clockDisplay } from './phone-clock.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
 export function createDirectory({ window: win, document: doc, navigate, icon, notify, onReplyState }) {
@@ -17,7 +19,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   const messenger = createMessenger(win, host);
   const storyBridge = createStoryBridge(win, host, notify);
   let clearMessageView;
-  let session, selected, route = 'messages', loadError = '', loading = false, dead = false;
+  let session, selected, route = 'home', loadError = '', loading = false, dead = false;
   let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people', chatBack = 'messages';
   function el(tag, cls = '', text) { const node = doc.createElement(tag); node.className = cls; if (text !== undefined) node.textContent = text; return node; }
   function button(text, run, cls = 'profile-action') { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', run); return b; }
@@ -224,6 +226,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       else void load(); return wrap;
     }
     if (target === 'details') return editorPage();
+    if (target === 'clock-settings' || target === 'supplement-settings') {const view=storySettings({win,host,session,signal:controller.signal,base,el,button,bridge:storyBridge,kind:target==='clock-settings'?'clock':'supplement'});editor=view.editor;return view.wrap;}
     if (target === 'contact-card') return contactCard();
     if (target === 'delete-person') return removalPage();
     if (target === 'restore-person') return removalPage(true);
@@ -314,7 +317,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, handles: target => ['preset-settings', 'ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
+  return { render, setRoute(target){route=target;}, clock(){if(!session&&!loading&&!loadError)void load();return session?clockDisplay(win,session.book):{time:'--:--',date:loadError?'剧情时间暂不可读取':'正在读取剧情时间',note:loadError||''};}, handles: target => ['clock-settings','supplement-settings','preset-settings', 'ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
     suspend() { messenger.cancelReply(); editor?.suspend?.(); },
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },

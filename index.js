@@ -4,9 +4,9 @@ import { createDirectory } from './modules/directory.js';
 import { ttReady, ttHost, ttFrame } from './modules/host.js';
 import { installLauncher } from './modules/launcher.js';
 import { createReplyIsland } from './modules/reply-island.js';
-const VERSION = "0.13.0";
+const VERSION = "0.14.0";
 const HOST_ID = 'yui-glass-phone';
-const stylesheet = new URL('./style.css?v=0.13.0', import.meta.url).href;
+const stylesheet = new URL('./style.css?v=0.14.0', import.meta.url).href;
 const icons = {
   contacts: '<rect x="5" y="3" width="15" height="18" rx="3"/><path d="M3 7h4M3 12h4M3 17h4"/><circle cx="12.5" cy="9" r="2.3"/><path d="M9 17v-1a3.5 3.5 0 0 1 7 0v1"/>',
   moments: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="m12 3.5 4 6M20 8l-3 7M17 19l-7-1M6 18l-1-7M5 7l7-3"/>',
@@ -94,10 +94,13 @@ function mount() {
   let wallpaper = 'graphite';
   const clock = () => {
     const now = new Date();
-    const time = now.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit',hour12:false});
+    const display = !demo && directory ? directory.clock() : null;
+    const time = display?.time || now.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit',hour12:false});
+    $('.status-time').title = display?.note || '设备时间';
     $('.status-time').textContent = time;
     if ($('.home-time')) $('.home-time').textContent = time;
-    if ($('.home-date')) $('.home-date').textContent = now.toLocaleDateString('zh-CN', {month:'long', day:'numeric', weekday:'long'});
+    if ($('.home-date')) $('.home-date').textContent = display?.date || now.toLocaleDateString('zh-CN', {month:'long', day:'numeric', weekday:'long'});
+    if ($('.home-clock-note')) $('.home-clock-note').textContent = display?.note || '';
   };
   const resize = () => {
     const viewport = window.visualViewport;
@@ -119,7 +122,7 @@ function mount() {
   };
   const toolbar = (title, subtitle = '', back = 'home', action = '') => `<header class="toolbar"><button type="button" data-go="${back}" class="icon-button" aria-label="${({messages:'返回消息列表',contacts:'返回联系人',me:'返回我',chat:'返回聊天'})[back] || '返回桌面'}">${icon('back')}</button><div class="toolbar-title"><h1>${title}</h1>${subtitle ? `<span>${subtitle}</span>` : ''}</div>${action || '<span class="toolbar-spacer"></span>'}</header>`;
   function home() {
-    return `<section class="home-page"><div class="home-clock"><div class="home-date"></div><div class="home-time"></div><div class="home-caption"><span></span> 把日常，轻轻收好 <span></span></div></div>
+    return `<section class="home-page"><div class="home-clock"><div class="home-date"></div><div class="home-time"></div><div class="home-clock-note"></div><div class="home-caption"><span></span> 把日常，轻轻收好 <span></span></div></div>
       <div class="home-orbit" aria-hidden="true"><span>✦</span><i></i></div>
       <div class="desktop-apps">${[['messages','message','消息'],['thread','thread','动态'],['settings','settings','设置']].map(([target,name,label]) => `<button type="button" class="app" data-go="${target}" aria-label="打开${label}"><span class="app-icon">${icon(name)}${demo && target === 'messages' ? '<b class="app-dot"></b>' : ''}</span><span>${label}</span></button>`).join('')}</div>
       <div class="desktop-bottom"><span class="page-dot"></span><span></span></div></section>`;
@@ -158,7 +161,7 @@ function mount() {
     return `${toolbar('动态','')}<div class="placeholder-page"><div class="placeholder-icon">${icon('thread')}</div><h2>留一处空白</h2><p>想说的话，遇见的小事。<br>以后，慢慢放在这里。</p><span class="quiet-pill">待续</span></div>`;
   }
   function settings() {
-    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃</span></div><span class="little-star">✦</span></section>${demo ? '' : '<button type="button" class="profile-action" data-go="ai-settings">独立 API 设置</button><button type="button" class="profile-action" data-go="preset-settings">聊天预设</button>'}<h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">壁纸选择仅在本次打开期间保留。</p><button type="button" class="profile-action" data-demo="toggle">${demo ? '退出样式演示' : '独立样式演示'}</button><p class="settings-note">样式演示与剧情人物资料分开，不保存示例记录。</p><div class="version">灰玻璃小手机 <span>0.13.0</span></div></div>`;
+    return `${toolbar('设置','',settingsBack)}<div class="settings-page"><section class="identity-card">${avatar('self')}<div><strong>我的小手机</strong><span>灰玻璃</span></div><span class="little-star">✦</span></section>${demo ? '' : '<button type="button" class="profile-action" data-go="ai-settings">独立 API 设置</button><button type="button" class="profile-action" data-go="preset-settings">聊天预设</button><button type="button" class="profile-action" data-go="clock-settings">剧情时间</button><button type="button" class="profile-action" data-go="supplement-settings">待同步补记</button>'}<h2 class="section-label">外观</h2><section class="settings-card"><div class="setting-line"><span>${icon('image')}桌面壁纸</span><small>${wallpaper === 'graphite' ? '深灰渐变' : '雾灰渐变'}</small></div><div class="swatches"><button type="button" class="swatch graphite" data-wallpaper="graphite" aria-label="深灰渐变" aria-pressed="${wallpaper === 'graphite'}"><span>深灰</span>${wallpaper === 'graphite' ? '<b>✓</b>' : ''}</button><button type="button" class="swatch mist" data-wallpaper="mist" aria-label="雾灰渐变" aria-pressed="${wallpaper === 'mist'}"><span>雾灰</span>${wallpaper === 'mist' ? '<b>✓</b>' : ''}</button></div></section><section class="settings-card settings-summary"><div class="setting-line"><span>${icon('phone')}手机外壳</span><small>原版磨砂</small></div><div class="setting-line"><span>${icon('moon')}配色</span><small>深灰玻璃</small></div></section><p class="settings-note">壁纸选择仅在本次打开期间保留。</p><button type="button" class="profile-action" data-demo="toggle">${demo ? '退出样式演示' : '独立样式演示'}</button><p class="settings-note">样式演示与剧情人物资料分开，不保存示例记录。</p><div class="version">灰玻璃小手机 <span>0.14.0</span></div></div>`;
   }
   function details() {
     return `${toolbar('聊天资料','','chat')}<div class="detail-page">${avatar(activeChat)}<h2>${people[activeChat].name}</h2><p>${activeChat === 'group' ? '把大家的小日常，收在一起。' : '有些小事，只想和你分享。'}</p><span class="quiet-pill">示例${activeChat === 'group' ? '群聊 · 3 人' : '联系人'}</span><div class="detail-note">头像、备注与聊天背景<br>后续在这里设置</div></div>`;
@@ -207,6 +210,7 @@ function mount() {
     $('.toast').hidden = true;
     if (target === 'settings' && current !== 'settings') settingsBack = current === 'me' ? 'me' : 'home';
     current = target;
+    directory?.setRoute(target);
     page.className = `page page-${target}`;
     screen.dataset.page = target;
     if (!demo && directory.handles(target)) {
@@ -243,6 +247,7 @@ function mount() {
     window.visualViewport?.addEventListener('scroll', resize);
     window.addEventListener('resize', resize);
     if (!page.childElementCount) navigate(current,false);
+    clock();
     panel.focus({preventScroll:true});
     clearInterval(clockInterval);
     clockInterval = setInterval(clock, 15000);

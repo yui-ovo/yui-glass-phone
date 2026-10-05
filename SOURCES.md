@@ -132,3 +132,9 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 依据用户指定的 [ST-MyriadKnots 公开 API](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/docs/public-api.md) 和 [公开桥实现](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/src/v3/public-memory-bridge.js) 核对 schemaVersion 1、身份和材料范围。本项目独立实现适配、表单、知识边界说明和合成测试；未复制或远程加载插件实现，未读取其内部存储。
 
 仅调用 getStatus、getPromptSnapshot、getSnapshot；不调用 readMemory 的后台全库读取。千千结文档明确只读接口不支持写回或触发总结。快照是最近已准备材料，不代表针对手机消息重新检索，也不保证所有业务分区已加载。TT 兼容仍需实际宿主和插件版本验收。
+
+## 0.14.0 时间与补记
+
+时间标记和摘要正文来源依据 [千千结 memory-runtime](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/src/v3/memory-runtime.js)、[story-clock](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/src/story-clock.js) 和 [memory-content-sanitizer](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/src/memory-content-sanitizer.js) 核对。过滤函数仅在仓库外用于兼容验证，未复制进产品。新模块、界面、包裹符及回执逻辑由本项目编写。
+
+ST 生成前事件、MESSAGE_SENT、updateMessageBlock、saveChat 和 chats/get、chats/save 对照官方 release 源码；TT 的 api.chat.open(ref).history.tail 和 getContext().saveChat 对照官方 main API/源码。保存完成后读回核对；不假定宿主保存函数 resolve 就代表保存成功。

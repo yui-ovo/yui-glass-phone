@@ -40,6 +40,7 @@ export function validateHistory(value, archiveId) {
     if (m.replyTo !== undefined && (typeof m.replyTo !== 'string' || !m.replyTo || m.replyTo.length > 128 || m.replyTo === m.messageId)) throw Error('引用消息身份无效');
     if (m.editedAt !== undefined && (typeof m.editedAt !== 'string' || !Number.isFinite(Date.parse(m.editedAt)))) throw Error('消息修改时间无效');
     validateText(m.text); validatePayload(m);
+    if(m.storyTime!==undefined && (!record(m.storyTime)||m.storyTime.source!=='story'||!['current','carried','manual','unknown','ambiguous'].includes(m.storyTime.status)||!['date','time','weekday','text','anchor'].every(k=>typeof m.storyTime[k]==='string'&&m.storyTime[k].length<=1000)))throw Error('消息剧情时间无效');
     if (kindOf(m) !== 'text' && value.version < 3) throw Error('特殊消息需要新版存档格式');
     ids.add(m.messageId); previous = m.sequence; size += m.text.length;
   }

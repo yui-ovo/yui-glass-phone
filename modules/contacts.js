@@ -1,5 +1,7 @@
 // Adapted from the owner's yui-pocket contacts/worldbook model; see SOURCES.md.
 import { validateMemoryPolicy } from './memory-policy.js';
+import { validateClockSettings } from './phone-clock.js';
+import { validateSyncSettings } from './supplement.js';
 export const clone = value => structuredClone(value);
 export const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
 export const displayName = person => person.remark.trim() || person.name;
@@ -65,6 +67,8 @@ export function validateBook(book) {
   account(book.self.account);
   if (!string(book.self.name, 80, true)) throw Error('请填写我的名字（最多 80 字）');
   validateAvatar(book.self.avatar);
+  if (book.phoneClock !== undefined) validateClockSettings(book.phoneClock);
+  if (book.storySync !== undefined) validateSyncSettings(book.storySync);
   for (const person of book.people) {
     if (!record(person) || !string(person.id, 128, true) || ids.has(person.id) || !string(person.name, 80, true) || !string(person.remark, 80) || !string(person.description, 1000)) throw Error('人物资料无效，请检查名字、备注和设定');
     ids.add(person.id); account(person.account);

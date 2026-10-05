@@ -1299,3 +1299,18 @@ h1, h2, p { margin: 0; }
 .memory-settings .profile-help { font-size:10px; line-height:1.7; margin:7px 0; }
 .memory-preview { max-height:230px; overflow:auto; }
 .memory-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0; font:inherit; font-size:11px; line-height:1.7; color:#ccc4d7; }
+.home-clock-note{font-size:10px;color:var(--muted);margin-top:7px;line-height:1.4}
+.story-manager .directory-scroll{padding:12px 15px 20px;gap:10px}
+.story-manager .profile-help,.story-manager .profile-status{font-size:11px;line-height:1.65}
+.story-manager .memory-label{font-size:12px}
+.story-manager input:not([type=checkbox]),.story-manager select{font-size:12px;min-height:34px;padding:7px 9px;width:100%;box-sizing:border-box}
+.story-manager .preset-button{font-size:11px;min-height:32px;padding:7px 10px}
+.story-manager .memory-toggle{font-size:12px;gap:8px}
+.story-manager .supplement-row{display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid #ffffff10;font-size:12px}
+.story-manager .supplement-row input{flex:none;margin-top:3px;width:15px;height:15px}
+.story-manager .supplement-row>span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.story-manager .supplement-row small{font-size:10px;color:var(--muted)}
+.story-manager .memory-text{font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
+.story-manager .memory-input-frame input{display:block;font-size:16px;width:123.076923%;max-width:none;height:39px;min-height:39px;margin:0;transform:scale(.8125);transform-origin:top left;border:1px solid #ffffff18;border-radius:10px;background:#ffffff05;color:#d8d0e2}
+.story-manager .story-save{min-height:30px;min-width:42px;padding:5px 7px;font-size:11px;justify-self:end}
+.status-time{max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

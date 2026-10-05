@@ -78,8 +78,8 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
       main.append(quote);
     }
     row.setAttribute('aria-label', outgoing ? `我方消息，${self.name}` : `AI 回复，${person.name}`);
-    const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
-    time.title = '设备记录时间，不代表剧情时间'; time.dateTime = message.createdAt; main.append(time);
+    const time = el('time', 'message-saved-time', pending ? '尚未确认保存' : message.storyTime?.text || new Date(message.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+    time.title = message.storyTime ? '发送时的剧情时间'+(message.storyTime.status==='carried'?' · 沿用此前时间':'') : '设备记录时间，不代表剧情时间'; if(!message.storyTime)time.dateTime = message.createdAt; main.append(time);
     if (outgoing) row.append(main, avatar(self)); else row.append(avatar(person), main);
     if (!pending) actions.decorate(row, message); return row;
   }
