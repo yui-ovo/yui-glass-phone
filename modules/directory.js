@@ -8,6 +8,7 @@ import { mountConversation } from './message-view.js';
 import { apiSettings, materialEditor, personaPreview } from './ai-editor.js';
 import { currentPersona } from './ai.js';
 import { storyEditor } from './story-editor.js';
+import { memoryEditor } from './memory-editor.js';
 import { createStoryBridge } from './story-bridge.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
@@ -110,6 +111,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     scroll.append(personaPreview(win, el));
     const materials = !self ? materialEditor({ win, scroll, draft, el, button, current, status }) : undefined;
     if (!self) storyEditor({win,scroll,draft,book:captured.book,messenger,el,button,current,status});
+    if (!self) memoryEditor({win,scroll,draft,el,button,current,status});
     const uploadLabel = el('label', 'profile-label', '上传头像'), upload = el('input'); upload.type = 'file'; upload.accept = 'image/png,image/jpeg,image/webp'; upload.setAttribute('aria-label', '上传头像'); uploadLabel.append(upload); scroll.append(uploadLabel);
     const urlLabel = el('label', 'profile-label', '头像图片 URL'), url = el('input'); url.type = 'url'; url.maxLength = 2048; url.setAttribute('aria-label', '头像图片 URL'); urlLabel.append(url); scroll.append(urlLabel);
     let baselineUrl = '';

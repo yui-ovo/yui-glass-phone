@@ -126,3 +126,9 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 ## 0.12.2 预设界面
 
 依据用户提供截图中的列表、行内开关及更多菜单交互思路，使用项目既有灰玻璃色彩重新编写页面与 CSS。没有读取或复制其他作者 UI 源码；没有添加截图中的线下模式、文件夹或其他未实现功能。
+
+## 0.13.0 千千结读取接口
+
+依据用户指定的 [ST-MyriadKnots 公开 API](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/docs/public-api.md) 和 [公开桥实现](https://github.com/atonal519/ST-MyriadKnots/blob/86aa11bcb603c38f1e82becc649a5e30c76661ab/src/v3/public-memory-bridge.js) 核对 schemaVersion 1、身份和材料范围。本项目独立实现适配、表单、知识边界说明和合成测试；未复制或远程加载插件实现，未读取其内部存储。
+
+仅调用 getStatus、getPromptSnapshot、getSnapshot；不调用 readMemory 的后台全库读取。千千结文档明确只读接口不支持写回或触发总结。快照是最近已准备材料，不代表针对手机消息重新检索，也不保证所有业务分区已加载。TT 兼容仍需实际宿主和插件版本验收。

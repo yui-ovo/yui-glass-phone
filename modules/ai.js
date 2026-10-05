@@ -1,5 +1,6 @@
 import { presetMessages, PRESET_STYLE } from './presets.js';
 import { readStoryContext, STORY_RULES } from './story-context.js';
+import { readMemoryReference } from './memory-bridge.js';
 import { clone, record, validateMaterials } from './contacts.js';
 import { forPerson, validateText, quotedMessage } from './messages.js';
 import { kindOf, summary } from './rich-messages.js';
@@ -91,7 +92,7 @@ export function replyContext(win, book, person) {
   }
   const materials = person.roleplayMaterials || []; validateMaterials(materials);
   return { character: { name: person.name, onlinePersona: person.description, card }, user: persona,
-    phoneSelf: { name: book.self.name }, story: readStoryContext(win, person), worldbook: materials.filter(item => !(person.aiExcludedMaterials || []).includes(materialKey(item))).map(({world,uid,title,content})=>({world,uid,title,content})) };
+    phoneSelf: { name: book.self.name }, story: readStoryContext(win, person), memory: readMemoryReference(win, person), worldbook: materials.filter(item => !(person.aiExcludedMaterials || []).includes(materialKey(item))).map(({world,uid,title,content})=>({world,uid,title,content})) };
 }
 export function buildPrompt(context, history, personId, historyCount, prompt = DEFAULT_PROMPT, frontPrompt = '', preset) {
   const data = JSON.stringify(context);

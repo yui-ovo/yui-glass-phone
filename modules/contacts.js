@@ -1,4 +1,5 @@
 // Adapted from the owner's yui-pocket contacts/worldbook model; see SOURCES.md.
+import { validateMemoryPolicy } from './memory-policy.js';
 export const clone = value => structuredClone(value);
 export const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
 export const displayName = person => person.remark.trim() || person.name;
@@ -76,6 +77,7 @@ export function validateBook(book) {
     if (person.roleplayMaterials !== undefined) validateMaterials(person.roleplayMaterials);
     if (person.phoneWorldbooks !== undefined) validatePhoneWorldbooks(person.phoneWorldbooks);
     if (person.storyContext !== undefined) validateStoryPolicy(person.storyContext);
+    if (person.memoryLink !== undefined) validateMemoryPolicy(person.memoryLink);
     if (person.aiExcludedMaterials !== undefined && (!Array.isArray(person.aiExcludedMaterials) || person.aiExcludedMaterials.length > 20 || !person.aiExcludedMaterials.every(key => typeof key === 'string' && (person.roleplayMaterials || []).some(item => JSON.stringify([item.world, item.uid]) === key)))) throw Error('世界书排除条目格式无效，已停止保存');
   }
   return book;

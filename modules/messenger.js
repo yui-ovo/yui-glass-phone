@@ -85,6 +85,8 @@ export function createMessenger(win, profiles) {
       const catalog = win.indexedDB ? await library.available(captured.book.id, id) : [];
       if (!current()) return;
       const prompt = assemblePhonePrompt(context, initial, id, config, catalog, preset);
+      profiles.assertSession(captured, signal);
+      if (!sameJson(replyContext(win, fresh.book, person), context)) throw Error('参考资料已变化，请重新请求回复');
       const text = await apiRequest(win, config, 'reply', prompt, controller.signal);
       if (!current()) return;
       if(win.localStorage.getItem(PRESETS_KEY)!==presetState.raw)throw Error('聊天预设已变化，本次回复未保存，请重新请求');

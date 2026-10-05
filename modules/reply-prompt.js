@@ -3,6 +3,7 @@ import { ACTION_PROTOCOL, kindOf } from './rich-messages.js';
 import { conversationId } from './messages.js';
 import { createMessageStore } from './message-host.js';
 import { createStickerLibrary } from './stickers.js';
+import { sameJson } from './contacts.js';
 export function assemblePhonePrompt(context,history,id,config,catalog,preset){
  const prompt=buildPrompt(context,history,id,config.historyCount,config.prompt,config.frontPrompt,preset);
  prompt.push({role:'system',content:ACTION_PROTOCOL});
@@ -14,5 +15,5 @@ export async function previewPhonePrompt(win,profiles,id,preset,signal){
  if(!person)throw Error('请先选择当前存档的好友');
  const context=replyContext(win,session.book,person),history=await createMessageStore(win,profiles,session,signal).read();
  const catalog=win.indexedDB?await createStickerLibrary(win,session.account).available(session.book.id,id):[];
- profiles.assertSession(session,signal);return assemblePhonePrompt(context,history,id,readConfig(win),catalog,preset);
+ profiles.assertSession(session,signal);if(!sameJson(replyContext(win,session.book,person),context))throw Error('参考资料已变化，请重新预览');return assemblePhonePrompt(context,history,id,readConfig(win),catalog,preset);
 }
