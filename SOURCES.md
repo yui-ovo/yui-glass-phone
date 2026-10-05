@@ -91,3 +91,15 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 ## 0.10.0 按分类分配表情包与转账
 
 阅读用户 yui-ovo/yuii/phone-ui.js 的 renderStickers、renderStickerTabs、addSticker、openRoleBindingModal、saveRoleBinding、deleteCategory、批量删除，以及 sendTransferBtn、handleMoneyBubbleClick、showTransferActionModal。按其分类/长按/角色分配与转账收退流程重写新模块，不复用按名字/数组下标关联、宽松 parseFloat、同层同步或 HTML 拼接。类别用 UUID，权限用存档/人物 ID；数据仅新手机独立 IndexedDB。旧白底 HTML 不参与本轮。
+
+
+## 0.11.0 剧情读取与临时扩展参考
+
+2026-10-05 仅核对官方宿主代码；新 story-context、story-editor、story-bridge 模块独立实现，没有复用其他作者小手机实现。
+
+- ST release，commit 06bde939fb1e9c4c8d8641d810f0a916b5bce127：[context](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/st-context.js)、[生成流程及 setExtensionPrompt](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/script.js)、[隐藏楼层](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/chats.js)、[聊天完成提示词组装](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/openai.js)。
+- TT 2.3.0 源码，commit a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375：[context](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/st-context.js)、[生成流程](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/script.js)、[隐藏楼层](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/chats.js)、[扩展提示词定义](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/extension-prompts.js)、[聊天完成提示词组装](https://github.com/Darkatse/TauriTavern/blob/a1855be4a4f8b6ee7cd0374a84dbb3709c3e5375/src/scripts/openai.js)。
+- hideChatMessageRange 使用 is_system 标记隐藏，正文生成排除这些消息。本项目要求显式 false 才读取，先排除隐藏/工具再取条数；mes 是当前显示备选，不采集 swipes。TT 未加载的历史不额外读取。
+- GENERATION_AFTER_COMMANDS 是被宿主等待的生成前事件。通过 setExtensionPrompt 设置 IN_CHAT=1、depth=0、SYSTEM=0、scan=false，并提供异步有效性过滤。使用本扩展独立 key；生成结束/停止/切档/禁用删除该 key，不清空其他扩展内容。
+- 仅开启对应人物开关才读取/分享。没有调用宿主生成 API、写入正文楼层、修改预设，TT 无新增 ST HTTP 请求。正文引用由酒馆下一次生成带给其 API；手机回复继续使用独立 API。
+- 此前版本“不读取正文”的说明只适用于此前版本。本版默认仍关闭，只按当前人物授权读取当前已加载正文；源码核对和模拟测试不等于真机验收，也不构成分支回滚支持。

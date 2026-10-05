@@ -1,5 +1,6 @@
+import { planStickerImport, runStickerImport, importCounts, remainingImport } from './sticker-import.js';
 import { readSticker, fetchSticker } from './stickers.js';
-import { FAVORITES, parseStickerLines } from './sticker-groups.js';
+import { FAVORITES } from './sticker-groups.js';
 import { money } from './rich-messages.js';
 import { conversationId } from './messages.js';
 
@@ -12,7 +13,7 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   let active = true, task, view = '', selectedTransfer, receiptState, categoryId=FAVORITES, holdTimer;
   const hostSignal = messenger.sessionSignal();
   const current = controller => active && !hostSignal.aborted && !controller?.signal.aborted;
-  function cancel() { clearTimeout(holdTimer); task?.abort(); task = undefined; form.busy = false; }
+  function cancel() { clearTimeout(holdTimer); task?.abort(); task = undefined; form.busy = !!form.importJob?.running; }
   function close() { cancel(); panel.hidden = true; panel.replaceChildren(); view = ''; trigger?.setAttribute('aria-expanded','false'); }
   function frame(title) {
     cancel(); panel.replaceChildren(); panel.hidden = false; panel.dataset.view = view; panel.setAttribute('aria-label', title); trigger?.setAttribute('aria-expanded','true');
@@ -22,7 +23,7 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   }
   function input(body, label, key, multiline = false) {
     const row = el('label','profile-label',label), field = el(multiline?'textarea':'input'); field.value = form[key]; field.setAttribute('aria-label',label);
-    field.maxLength = key === 'description' ? 256 : key === 'note' ? 120 : key === 'category' ? 40 : key === 'urls' ? 16000 : 16;
+    field.maxLength = key === 'description' ? 256 : key === 'note' ? 120 : key === 'category' ? 40 : key === 'urls' ? 128000 : 16;
     field.oninput = () => { form[key] = field.value; form.edit++; }; if(multiline) field.rows=2;
     row.append(field); body.append(row); return field;
   }
@@ -87,7 +88,7 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   async function stickers(selecting=false) {
     view='stickers';const {body,status}=stickerFrame('表情包'),controller=new AbortController();task=controller;status.textContent='正在读取…';
     try{
-      const snapshot=await library.snapshot();if(!current(controller))return;status.textContent='';
+      const snapshot=await library.snapshot();if(!current(controller))return;status.textContent=form.importReport ? reportText(form.importReport) : '';
       if(!snapshot.categories.some(c=>c.id===categoryId))categoryId=FAVORITES;
       const filterRow=el('div','sticker-filter'),filter=el('nav','sticker-tabs'),count=el('span','sticker-count');filter.setAttribute('aria-label','表情包分类');
       for(const c of snapshot.categories){const tab=button(c.name,()=>{categoryId=c.id;void stickers();},'sticker-tab');tab.dataset.categoryId=c.id;if(c.id===categoryId){tab.classList.add('active');tab.setAttribute('aria-pressed','true');}else tab.setAttribute('aria-pressed','false');tab.title='长按管理分类';hold(tab,()=>void categoryView(c.id),controller);filter.append(tab);}
@@ -123,8 +124,13 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
       const selectedIds=new Set(people.people.map(p=>p.id));const unavailable=draft.bindings.filter(b=>b.archiveId===people.archiveId&&!selectedIds.has(b.personId)).length;
       if(unavailable)body.append(el('p','profile-help',`${unavailable} 位已不在人物列表的绑定仍保留；不会转给同名新人物。`));
       body.append(button('保存分类',async()=>{if(form.busy)return;form.busy=true;try{await library.saveCategory(id,name.value,draft.bindings,draft.revision,controller.signal);if(current(controller)){delete form.groupDrafts?.[id];await stickers();}}catch(e){if(current(controller))status.textContent=e.message;}finally{form.busy=false;}},'profile-action primary'),button('取消修改',()=>{delete form.groupDrafts?.[id];void stickers();}));
-      if(id!==FAVORITES)body.append(button('删除分类',()=>confirmAction('删除分类',`删除“${cat.name}”及其中的素材？已发送的聊天图片仍保留。`,async signal=>{await library.removeCategory(id,draft.revision,signal);if(form.groupDraft?.id===id)form.groupDraft=undefined;categoryId=FAVORITES;},()=>void categoryView(id)),'profile-action danger'));
+      if(id!==FAVORITES)body.append(button('删除分类',()=>confirmAction('删除分类',`删除“${cat.name}”及其中的素材？已发送的聊天图片仍保留。`,async signal=>{await library.removeCategory(id,draft.revision,signal);delete form.groupDrafts?.[id];categoryId=FAVORITES;},()=>void categoryView(id)),'profile-action danger'));
     }catch(e){if(current(controller))status.textContent=e.message;}
+  }
+  function reportText(report){return `已保存 ${report.saved} 张 · 失败 ${report.failed} 张 · 待处理 ${report.pending} 张${report.stopped?'；'+report.stopped:''}`;}
+  function compactField(field){
+    const box=el('span','sticker-input-frame'+(field.tagName==='TEXTAREA'?' multiline':''));
+    field.replaceWith(box);box.append(field);
   }
   async function importView(){
     view='import';const {body,status}=stickerFrame('添加表情包'),controller=new AbortController();task=controller;status.textContent='正在读取…';
@@ -134,34 +140,59 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
       for(const c of snapshot.categories){const o=el('option','',c.name);o.value=c.id;choice.append(o);}const newOption=el('option','','＋ 新分类');newOption.value='new';choice.append(newOption);choiceRow.append(choice);body.append(choiceRow);
       choice.value=snapshot.categories.some(c=>c.id===(form.importCategory||categoryId))?(form.importCategory||categoryId):FAVORITES;
       if(form.importCategory==='new')choice.value='new';
-      const newName=input(body,'新分类名称','newCategory');newName.maxLength=40;newName.value=form.newCategory||'';newName.parentElement.hidden=choice.value!=='new';choice.onchange=()=>{form.importCategory=choice.value;form.edit++;newName.parentElement.hidden=choice.value!=='new';};
+      const newName=input(body,'新分类名称','newCategory');newName.maxLength=40;newName.value=form.newCategory||'';
+      const nameRow=newName.parentElement;compactField(newName);nameRow.hidden=choice.value!=='new';choice.onchange=()=>{form.importCategory=choice.value;form.edit++;nameRow.hidden=choice.value!=='new';};
       const file=el('input');file.type='file';file.multiple=true;file.accept='image/png,image/jpeg,image/webp,image/gif';file.hidden=true;file.setAttribute('aria-label','选择表情包图片');
       const upload=button('',()=>file.click(),'sticker-upload-zone');upload.append(el('span','upload-icon','＋'),el('span','','选择本地图片'),el('small','','PNG · JPG · WebP · GIF / 每张 2 MB'));
-      const fileRows=el('div','sticker-file-descriptions');
-      function paintFiles(){fileRows.replaceChildren();form.fileDescriptions ||= form.files.map(f=>f.name.replace(/\.[^.]+$/,'')||'表情包');if(form.files.length)upload.querySelector('small').textContent=`已选 ${form.files.length} 张`;
-        form.files.forEach((f,i)=>{const label=el('label','profile-label',f.name),description=el('input');description.maxLength=256;description.value=form.fileDescriptions[i]||'';description.setAttribute('aria-label',`图片描述 ${i+1}`);description.oninput=()=>{form.fileDescriptions[i]=description.value;form.edit++;};label.append(description);fileRows.append(label);});
+      const fileRows=el('div','sticker-file-descriptions'),count=el('p','sticker-import-count');count.setAttribute('role','status');
+      function countItems(){
+        const links=(form.urls||'').split(/\r?\n/).filter(s=>s.trim()).length;
+        count.textContent=`已选择 ${form.files.length} 张图片 · ${links} 条链接，自动分批处理`;
       }
-      file.onchange=()=>{form.files=Array.from(file.files||[]);form.fileDescriptions=undefined;form.edit++;paintFiles();};body.append(upload,file,fileRows);paintFiles();
-      const urls=input(body,'批量链接（每行：描述:图片链接）','urls',true);urls.placeholder='开心:https://example.com/happy.png\n晚安:https://example.com/night.gif';urls.rows=3;
-      body.append(el('p','profile-help','每行一张，描述可含空格。每批最多 12 张，图片保存在本机；分类的角色权限请长按分类设置。'));
-      body.append(button('保存到表情包',async()=>{
-        if(form.busy)return;
-        let links;try{links=parseStickerLines(form.urls);}catch(e){status.textContent=e.message;return;}
-        const files=[...form.files],descriptions=[...(form.fileDescriptions||[])];if(!files.length&&!links.length||files.length+links.length>12){status.textContent='每批请选择 1–12 张图片或链接';return;}
+      function paintFiles(){fileRows.replaceChildren();form.fileDescriptions ||= form.files.map(f=>f.name.replace(/\.[^.]+$/,'')||'表情包');if(form.files.length)upload.querySelector('small').textContent=`已选 ${form.files.length} 张`;
+        form.files.forEach((f,i)=>{const label=el('label','profile-label',f.name),description=el('input');description.maxLength=256;description.value=form.fileDescriptions[i]||'';description.setAttribute('aria-label',`图片描述 ${i+1}`);description.oninput=()=>{form.fileDescriptions[i]=description.value;form.edit++;};label.append(description);compactField(description);fileRows.append(label);});
+      }
+      file.onchange=()=>{form.files=Array.from(file.files||[]);form.fileDescriptions=undefined;form.edit++;paintFiles();countItems();};body.append(upload,file,fileRows);paintFiles();
+      const urls=input(body,'批量链接（每行：描述:图片链接）','urls',true);urls.placeholder='开心:https://example.com/happy.png\n晚安:https://example.com/night.gif';urls.rows=4;urls.wrap='off';compactField(urls);urls.addEventListener('input',countItems);
+      body.append(count,el('p','profile-help','整批粘贴即可。坏链接会单独列出，重试只处理未成功的图片。素材库合计最多 120 张 / 20 MB。'));countItems();
+      if(form.importReport){
+        status.textContent=reportText(form.importReport);
+        if(form.importReport.errors.length){const errors=el('details','sticker-import-errors');errors.open=true;errors.append(el('summary','',`未成功的图片（${form.importReport.errors.length}）`));for(const error of form.importReport.errors)errors.append(el('p','',error));body.append(errors);}
+      }
+      const save=button('保存到表情包',async()=>{
+        if(form.busy||form.importJob?.running)return;
+        let job;try{job=planStickerImport([...form.files],[...(form.fileDescriptions||[])],form.urls);}catch(e){status.textContent=e.message;return;}
         const options={revision:snapshot.revision,...(choice.value==='new'?{newName:newName.value}:{categoryId:choice.value})};
-        form.busy=true;const fields=[...body.querySelectorAll('input,textarea,select,button')];fields.forEach(f=>f.disabled=true);status.textContent='正在处理图片…';
+        if(choice.value==='new'&&(!newName.value.trim()||snapshot.categories.some(c=>c.name===newName.value.trim()))){status.textContent='请填写未使用的新分类名称';return;}
+        form.importJob=job;job.controller=controller;form.busy=true;lock(true);stop.hidden=false;
         try{
-          const items=[];
-          for(let i=0;i<files.length;i++){if(!descriptions[i]?.trim())throw Error(`请填写第 ${i+1} 张图片的描述`);items.push({data:await readSticker(files[i],win,controller.signal),description:descriptions[i].trim(),category:'收藏',allowedAI:false});if(!current(controller))return;}
-          for(const link of links){items.push({data:await fetchSticker(link.url,win,controller.signal),description:link.description||'表情包',category:'收藏',allowedAI:false});if(!current(controller))return;}
-          const saved=await library.addBatch(items,controller.signal,options);if(!current(controller))return;
-          categoryId=options.categoryId||saved.categories.find(c=>c.name===options.newName.trim()).id;
-          form.urls='';form.files=[];form.fileDescriptions=undefined;form.newCategory='';form.importCategory=categoryId;form.edit++;await stickers();
-        }catch(e){if(current(controller))status.textContent=`${e.message}；本批未完成，输入已保留`;}
-        finally{form.busy=false;if(current(controller))fields.forEach(f=>f.disabled=false);}
-      },'profile-action primary'),button('取消导入',()=>{form.files=[];form.fileDescriptions=undefined;form.urls='';form.newCategory='';form.edit++;void stickers();}));
+          await runStickerImport(job,{library,options,signal:controller.signal,prepare:item=>item.kind==='file'?readSticker(item.file,win,controller.signal):fetchSticker(item.url,win,controller.signal),onChange:(value,progress)=>{if(current(controller))status.textContent=(progress?progress+' · ':'')+reportText(importCounts(value));}});
+        }finally{
+          // Record confirmed batches even if the panel was closed while committing.
+          // This captured form belongs only to the originating conversation.
+          Object.assign(form,remainingImport(job));
+          form.importReport={...importCounts(job),stopped:job.stopped,errors:job.items.filter(i=>i.status==='failed').map(i=>`${i.description||i.label}：${i.error}`)};
+          if(job.categoryId){categoryId=job.categoryId;form.importCategory=categoryId;form.newCategory='';}
+          delete form.importJob;form.busy=false;form.edit++;
+          if(current(controller)){
+            if(form.importReport.saved===form.importReport.total)await stickers();else await importView();
+          }
+          for(const listener of job.listeners||[])listener();
+          job.listeners?.clear();
+        }
+      },'profile-action primary');
+      const stop=button('停止导入',()=>form.importJob?.controller.abort(),'profile-action');stop.hidden=!form.importJob?.running;
+      body.append(save,stop,button('取消导入',()=>{if(form.importJob?.running)return;form.files=[];form.fileDescriptions=undefined;form.urls='';form.newCategory='';form.importReport=undefined;form.edit++;void stickers();}));
+      function lock(value){for(const field of body.querySelectorAll('input,textarea,select,button'))if(field!==stop)field.disabled=value;}
+      if(form.importJob?.running){
+        lock(true);status.textContent='正在停止上一批导入，请稍候…';
+        const pending=form.importJob,refresh=()=>{if(current(controller))void importView();};
+        (pending.listeners ||= new Set()).add(refresh);
+        controller.signal.addEventListener('abort',()=>pending.listeners.delete(refresh),{once:true});
+      }
     }catch(e){if(current(controller))status.textContent=e.message;}
   }
+
 
   const abort=()=>close();hostSignal.addEventListener('abort',abort,{once:true});
   wrap.addEventListener('pointerdown',event=>{if(!panel.hidden&&!panel.contains(event.target)&&!trigger?.contains(event.target))close();},{signal:life.signal});

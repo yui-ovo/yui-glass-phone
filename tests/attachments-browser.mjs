@@ -115,6 +115,31 @@ try{
     await new Promise((resolve,reject)=>{const r=indexedDB.open(STICKER_DB,2);r.onsuccess=()=>{const d=r.result,tx=d.transaction('categories','readwrite');tx.objectStore('categories').put({account:'bad-groups',version:99});tx.oncomplete=()=>{d.close();resolve();};tx.onerror=reject;};});await fail(()=>bad.snapshot(),'bad groups read');await fail(()=>bad.addBatch([{data,description:'x',category:'收藏',allowedAI:false}]),'bad groups overwrite');
     return failures;
   },data);assert.deepEqual(groupsResult,[]);
+  // Paste more than twelve URLs, retain only failures, then retry without duplicates.
+  let imageFailure=true,slowImage=false,releaseImage;
+  await p.route('**/sticker-fixture/*.png',async route=>{
+    if(route.request().url().endsWith('/slow.png')&&slowImage)await new Promise(resolve=>releaseImage=resolve);
+    await route.fulfill({status:imageFailure&&route.request().url().endsWith('/bad.png')?404:200,contentType:'image/png',body:Buffer.from(data.split(',')[1],'base64')}).catch(()=>{});
+  });
+  await b(p,'添加附件').click();await b(p,'表情包').click();await b(p,'添加表情包').click();
+  const bulk=p.getByLabel('批量链接（每行：描述:图片链接）',{exact:true});
+  await p.getByLabel('保存到分类',{exact:true}).selectOption('new');await p.getByLabel('新分类名称',{exact:true}).fill('批量测试');
+  const bulkLines=Array.from({length:26},(_,i)=>`开心 微笑${i}:${base}/sticker-fixture/${i}.png`);
+  await bulk.fill([...bulkLines,`暂时失败:${base}/sticker-fixture/bad.png`,'<img src=x onerror=alert(1)>'].join('\n'));
+  assert((await p.locator('.sticker-import-count').textContent()).includes('28 条链接'));
+  const typography=await bulk.evaluate(e=>({size:getComputedStyle(e).fontSize,transform:getComputedStyle(e).transform,whiteSpace:getComputedStyle(e).whiteSpace,rect:e.getBoundingClientRect().width,parent:e.parentElement.getBoundingClientRect().width}));
+  assert.equal(typography.size,'16px');assert(typography.transform.includes('0.8125'));assert.equal(typography.whiteSpace,'pre');assert(Math.abs(typography.rect-typography.parent)<2);
+  await p.screenshot({path:path.join(root,`test-results/attachments-bulk-${tt?'tt':'st'}.png`)});
+  await b(p,'保存到表情包').click();await wait(async()=>await b(p,'保存到表情包').isEnabled()&&(await p.locator('.attachment-panel .profile-status').textContent()).includes('已保存 26 张'),'bulk partial');
+  assert((await p.locator('.attachment-panel .profile-status').textContent()).includes('失败 2 张'));assert.equal((await bulk.inputValue()).split('\n').length,2);assert.equal(await p.locator('.sticker-import-errors img').count(),0);
+  imageFailure=false;await bulk.fill(`暂时失败:${base}/sticker-fixture/bad.png\n修正:${base}/sticker-fixture/fixed.png`);await b(p,'保存到表情包').click();await wait(()=>b(p,'批量测试').count(),'bulk retry');assert.equal(await p.locator('.sticker-send').count(),28);
+  // Closing after the first committed batch must leave just the remaining two.
+  await b(p,'添加表情包').click();slowImage=true;
+  await bulk.fill([...Array.from({length:13},(_,i)=>`下一批${i}:${base}/sticker-fixture/next-${i}.png`),`等待:${base}/sticker-fixture/slow.png`].join('\n'));
+  await b(p,'保存到表情包').click();await wait(()=>!!releaseImage,'slow image started');await b(p,'关闭附件面板').click();slowImage=false;releaseImage();
+  await b(p,'添加附件').click();await b(p,'表情包').click();await b(p,'批量测试').click();await wait(async()=>await p.locator('.sticker-send').count()===40,'first batch retained');await b(p,'添加表情包').click();await wait(()=>b(p,'保存到表情包').isEnabled(),'cancel settled');assert.equal((await bulk.inputValue()).split('\n').length,2);
+  await b(p,'保存到表情包').click();await wait(async()=>await p.locator('.sticker-send').count()===42,'retry remaining after close');await b(p,'关闭附件面板').click();
+
   const before=await histories(p,tt);mode='delay';await p.waitForTimeout(850);await b(p,'让对方回复').click();await wait(()=>requests.length===4,'switch request');await p.evaluate(()=>profileMock.switch('0','second-chat'));release();await wait(()=>b(p,'登记人物').count(),'switched archive');assert.equal(await p.locator('.contact-row').count(),0);assert.deepEqual(await histories(p,tt),before);
   await p.evaluate(()=>profileMock.switch('1','different-card'));await wait(()=>b(p,'登记人物').count(),'different card');assert.equal(await p.locator('.contact-row').count(),0);assert.equal(await p.evaluate(()=>localStorage.getItem('tavern_friends_old')),'UNCHANGED');
   assert.deepEqual(errors,[]);console.log(`PASS ${tt?'TT':'ST'} attachments: gray UI, validation, preserved draft, local import/library, safe text, own and AI stickers/transfers, receipt/retry atomicity, refresh, hidden asset history, other friends/archives, cancelled AI, old storage unchanged`);await context.close();

@@ -75,9 +75,15 @@ export function validateBook(book) {
     validateAvatar(person.avatar);
     if (person.roleplayMaterials !== undefined) validateMaterials(person.roleplayMaterials);
     if (person.phoneWorldbooks !== undefined) validatePhoneWorldbooks(person.phoneWorldbooks);
+    if (person.storyContext !== undefined) validateStoryPolicy(person.storyContext);
     if (person.aiExcludedMaterials !== undefined && (!Array.isArray(person.aiExcludedMaterials) || person.aiExcludedMaterials.length > 20 || !person.aiExcludedMaterials.every(key => typeof key === 'string' && (person.roleplayMaterials || []).some(item => JSON.stringify([item.world, item.uid]) === key)))) throw Error('世界书排除条目格式无效，已停止保存');
   }
   return book;
+}
+export const defaultStoryPolicy = () => ({ readStory:false, storyCount:10, sharePhone:false, phoneCount:20 });
+export function validateStoryPolicy(value) {
+  if (!record(value) || typeof value.readStory !== 'boolean' || typeof value.sharePhone !== 'boolean' || !Number.isInteger(value.storyCount) || value.storyCount < 1 || value.storyCount > 100 || !Number.isInteger(value.phoneCount) || value.phoneCount < 1 || value.phoneCount > 200) throw Error('剧情衔接设置无效：正文 1–100 条，手机 1–200 条');
+  return value;
 }
 export function sameJson(a, b) {
   if (a === b) return true;

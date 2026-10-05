@@ -43,7 +43,7 @@ try {
   await page.goto(base+'/preview.html');
   await page.evaluate(()=>localStorage.setItem('yui-glass-phone.ai.v1',JSON.stringify({version:1,baseUrl:'https://ai.fixture.test/v1',apiKey:'fixture',model:'fixture-model',temperature:.8,maxTokens:800,historyCount:40})));
   await b(page,'打开设置').click();await b(page,'独立 API 设置').click();await page.getByText('高级设置',{exact:true}).click();assert.equal(await page.getByLabel('等待时间（秒）',{exact:true}).inputValue(),'120');await page.getByLabel('等待时间（秒）',{exact:true}).fill('90');
-  await page.getByText('手机聊天提示词',{exact:true}).click();const prompt=page.getByLabel('提示词内容',{exact:true});const defaultPrompt=await prompt.inputValue();assert(defaultPrompt.includes('手机'));await prompt.fill('只用短句，聊天风格测试');await b(page,'恢复默认提示词').click();assert.equal(await prompt.inputValue(),defaultPrompt);await prompt.fill('只用短句，聊天风格测试');await b(page,'保存 API 设置').click();
+  await page.getByText('聊天风格提示词',{exact:true}).click();const prompt=page.getByLabel('提示词内容',{exact:true});const defaultPrompt=await prompt.inputValue();assert(defaultPrompt.includes('手机'));await prompt.fill('只用短句，聊天风格测试');await b(page,'恢复默认提示词').click();assert.equal(await prompt.inputValue(),defaultPrompt);await prompt.fill('只用短句，聊天风格测试');await b(page,'保存 API 设置').click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yui-glass-phone.ai.v1')).timeoutSeconds),90);
   await home(page);await b(page,'打开消息').click();await b(page,'联系人').click();await b(page,'登记人物').click();await b(page,'从当前角色卡带入').click();await page.getByLabel('人物名字',{exact:true}).fill('小晴');await page.getByLabel('开局关系',{exact:true}).selectOption('friend');await b(page,'保存人物').click();await wait(async()=> (await page.locator('.profile-status').textContent()).includes('已保存到当前存档'),'profile');await b(page,'取消').click();await openChat(page);
   await text(page,'原消息');await text(page,'保留的消息');await page.waitForTimeout(850);
@@ -93,3 +93,4 @@ try {
   assert.deepEqual(errors,[]);console.log(`PASS ${tt?'TT':'ST'} island/prompt/actions: animation-stop, custom prompt/timeout, long-press/scroll, edit/cancel, dynamic quotes, hard delete/multi-delete, failure retry, refresh/context, late TT mutation`);await context.close();
  }
 }finally{await browser.close();server.close();}
+

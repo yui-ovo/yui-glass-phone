@@ -6,11 +6,14 @@ import { latestMessage, forPerson } from './messages.js';
 import { mountConversation } from './message-view.js';
 import { apiSettings, materialEditor, personaPreview } from './ai-editor.js';
 import { currentPersona } from './ai.js';
+import { storyEditor } from './story-editor.js';
+import { createStoryBridge } from './story-bridge.js';
 
 // All profile content uses textContent/value. HTML is reserved for fixed shell icons.
 export function createDirectory({ window: win, document: doc, navigate, icon, notify, onReplyState }) {
   const host = createProfileHost(win);
   const messenger = createMessenger(win, host);
+  const storyBridge = createStoryBridge(win, host, notify);
   let clearMessageView;
   let session, selected, route = 'messages', loadError = '', loading = false, dead = false;
   let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people', chatBack = 'messages';
@@ -105,6 +108,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     }
     scroll.append(personaPreview(win, el));
     const materials = !self ? materialEditor({ win, scroll, draft, el, button, current, status }) : undefined;
+    if (!self) storyEditor({win,scroll,draft,book:captured.book,messenger,el,button,current,status});
     const uploadLabel = el('label', 'profile-label', '上传头像'), upload = el('input'); upload.type = 'file'; upload.accept = 'image/png,image/jpeg,image/webp'; upload.setAttribute('aria-label', '上传头像'); uploadLabel.append(upload); scroll.append(uploadLabel);
     const urlLabel = el('label', 'profile-label', '头像图片 URL'), url = el('input'); url.type = 'url'; url.maxLength = 2048; url.setAttribute('aria-label', '头像图片 URL'); urlLabel.append(url); scroll.append(urlLabel);
     let baselineUrl = '';
@@ -145,10 +149,10 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
         if (index === -1) book.people.push(value); else book.people[index] = value;
       }
       else book.self = value;
-      saving = true; status.textContent = '正在保存…'; const controls = [...scroll.querySelectorAll('input, textarea, select, button'), save, cancel]; controls.forEach(n => n.disabled = true);
-      try { await host.save(captured, book, signal); if (current()) { Object.assign(draft, value); persisted = true; baseline = clone(draft); baselineUrl = url.value; selected = self ? selected : value.id; status.textContent = '已保存到当前存档'; } }
+      saving = true; status.textContent = '正在保存…'; const controls = [...scroll.querySelectorAll('input, textarea, select, button'), save, cancel]; const disabledBefore = controls.map(n=>n.disabled); controls.forEach(n => n.disabled = true);
+      try { await host.save(captured, book, signal); storyBridge.invalidate(); if (current()) { Object.assign(draft, value); persisted = true; baseline = clone(draft); baselineUrl = url.value; selected = self ? selected : value.id; status.textContent = '已保存到当前存档'; } }
       catch (error) { if (current()) status.textContent = `${error.message || '保存失败'}；草稿仍在此页`; }
-      finally { if (current()) { saving = false; controls.forEach(n => n.disabled = false); } }
+      finally { if (current()) { saving = false; controls.forEach((n,i) => n.disabled = disabledBefore[i]); } }
     }, 'profile-action primary');
     const cancel = button('取消', () => { if (saving) return; clearEditor(); go(self ? 'me' : lastFormRoute); });
     const actions = el('div', 'profile-actions'); actions.append(save, cancel); scroll.append(status, actions);
@@ -310,6 +314,6 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     suspend() { messenger.cancelReply(); editor?.suspend?.(); },
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
-    dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },
+    dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); storyBridge.dispose(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },
   };
 }

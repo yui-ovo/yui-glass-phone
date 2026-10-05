@@ -82,7 +82,7 @@ export function createMessenger(win, profiles) {
       if (!current()) return;
       const catalog = win.indexedDB ? await library.available(captured.book.id, id) : [];
       if (!current()) return;
-      const prompt = buildPrompt(context, initial, id, config.historyCount, config.prompt);
+      const prompt = buildPrompt(context, initial, id, config.historyCount, config.prompt, config.frontPrompt);
       prompt.push({ role: 'system', content: ACTION_PROTOCOL });
       prompt.push({ role: 'user', content: JSON.stringify({ availableStickers: catalog.map(({id,description,category}) => ({id,description,category})), pendingTransfers: initial.messages.filter(m => m.conversationId === conversationId(id) && kindOf(m) === 'transfer' && m.transfer.state === 'pending' && m.sender.kind === 'self').map(m => ({messageId:m.messageId, ...m.transfer})) }) });
       if (JSON.stringify(prompt).length > 180000) throw Error('参考内容过长，请减少表情包授权或历史条数');
