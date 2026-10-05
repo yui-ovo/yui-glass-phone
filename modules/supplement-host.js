@@ -5,7 +5,7 @@ export function supplementSupported(win) {
   const c=win.SillyTavern?.getContext();
   return !!(c?.eventSource?.on && c.eventSource?.removeListener && c.eventTypes?.MESSAGE_SENT && c.eventTypes?.GENERATION_AFTER_COMMANDS && c.getRequestHeaders && (!ttHost(win)||c.saveChat&&ttHost(win).api?.chat?.open));
 }
-export function captureSupplementHost(win, session, profiles, signal) {
+export function captureSupplementHost(win, session, profiles, signal, targetIndex) {
   const ctx=win.SillyTavern.getContext(),chat=ctx.chat;
   if(ctx.groupId!==undefined&&ctx.groupId!==null&&ctx.groupId!=='')throw Error('本批补记暂支持角色聊天，酒馆群聊请先关闭补记');
   if(!Array.isArray(chat)||!chat.length||chat.some(m=>!m))throw Error('请先加载完整的当前聊天');
@@ -13,8 +13,8 @@ export function captureSupplementHost(win, session, profiles, signal) {
   if(!ref.avatar||!ref.file)throw Error('无法确认补记所属存档');
   const native=ttHost(win)?.api?.chat?.open({kind:'character',characterId:ref.avatar.replace(/\.png$/,''),fileName:ref.file});
   if(native&&!native.history?.tail)throw Error('此 TT 版本缺少补记读回核对接口，请更新 TT');
-  let index=chat.length-1;
-  while(index>=0&&chat[index].is_user===true)index--;
+  let index=targetIndex ?? chat.length-1;
+  if(targetIndex===undefined)while(index>=0&&chat[index].is_user===true)index--;
   const target=chat[index],length=chat.length;
   if(!target||target.is_user!==false||target.role==='tool'||target.extra?.tool_invocations||typeof target.mes!=='string'||target.extra?.type||target.isPhoneMessage||target.isGaigaiPrompt||target.isGaigaiData)throw Error('找不到可追加补记的上一条 AI 正文');
   if(Array.isArray(target.swipes)&&(!Number.isInteger(target.swipe_id)||target.swipes[target.swipe_id]!==target.mes))throw Error('当前备选回复尚未稳定，请结束生成后再同步');

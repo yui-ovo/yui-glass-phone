@@ -1,3 +1,11 @@
+## 0.15.0 · 补记修改依据
+
+- 沿用 0.14.0 核实的 ST/TT 保存与历史接口。对照 ST public/script.js 的 MESSAGE_UPDATED 时序：事件发生在编辑器最终 saveChatConditional 之前，故先显式保存并读回确认，再修改手机记录。
+- 逐条消息 ID、三方哈希比较、来源去重、最近 50 条显示与范围提示为本项目实现；没有复制其他手机的实现代码。
+- 千千结继续只读公开桥；没有可靠的逐条摘要覆盖回执，因此界面显示总结状态未确认，不新增私有写入或总结接口。
+
+---
+
 # 本轮代码来源与接口依据
 
 仅修改 yui-ovo/yui-glass-phone。用户授权审查复用自己的 [yui-pocket](https://github.com/yui-ovo/yui-pocket/tree/d079e19216e8d7d83b008e821761d36929639e8f)，基线 0.2.0-alpha.12。

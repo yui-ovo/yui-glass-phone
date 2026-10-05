@@ -1314,3 +1314,7 @@ h1, h2, p { margin: 0; }
 .story-manager .memory-input-frame input{display:block;font-size:16px;width:123.076923%;max-width:none;height:39px;min-height:39px;margin:0;transform:scale(.8125);transform-origin:top left;border:1px solid #ffffff18;border-radius:10px;background:#ffffff05;color:#d8d0e2}
 .story-manager .story-save{min-height:30px;min-width:42px;padding:5px 7px;font-size:11px;justify-self:end}
 .status-time{max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-history-info{font-size:10px;line-height:1.6;color:#a6a2ac;margin:4px 0 12px;padding:6px 9px;border:1px solid #ffffff0d;border-radius:8px;flex:none}
+.chat-history-info summary{cursor:pointer;color:#b7b3bf}
+.chat-history-info p{margin:6px 0;overflow-wrap:anywhere}
+.history-more{align-self:center;padding:6px 10px;font-size:11px;color:#beb9ca;background:#ffffff05;border:1px solid #ffffff16;border-radius:8px;margin:4px 0 12px;cursor:pointer}

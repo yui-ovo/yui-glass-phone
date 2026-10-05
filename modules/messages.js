@@ -28,6 +28,7 @@ function validParties(m, archiveId) {
 }
 export function validateHistory(value, archiveId) {
   if (!record(value) || ![1, 2, 3].includes(value.version) || value.archiveId !== archiveId || !Number.isSafeInteger(value.revision) || value.revision < 0 || !Array.isArray(value.messages) || value.messages.length > MAX_MESSAGES) throw Error('消息格式或容量不支持，已停止写入');
+  if(value.storySyncedIds!==undefined&&(!Array.isArray(value.storySyncedIds)||value.storySyncedIds.length>20000||value.storySyncedIds.some(id=>typeof id!=='string'||!id||id.length>128)||new Set(value.storySyncedIds).size!==value.storySyncedIds.length))throw Error('补记同步索引无效或已达容量上限');
   const ids = new Set(); let previous = 0, size = 0;
   if (value.deletedMessageIds !== undefined && (!Array.isArray(value.deletedMessageIds) || value.deletedMessageIds.length > 20000 || !value.deletedMessageIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 128) || new Set(value.deletedMessageIds).size !== value.deletedMessageIds.length)) throw Error('消息删除索引格式或容量不支持，已停止写入');
   if (value.changeReceipts !== undefined && (!Array.isArray(value.changeReceipts) || value.changeReceipts.length > 64 || !value.changeReceipts.every(r => record(r) && typeof r.id === 'string' && r.id.length > 0 && r.id.length <= 128 && /^[a-f0-9]{64}$/.test(r.fingerprint)))) throw Error('消息操作回执格式不支持');

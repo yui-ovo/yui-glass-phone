@@ -1,3 +1,5 @@
+import {historyRange} from './history-range.js';
+import {phoneSyncStatus} from './sync-events.js';
 import { forPerson, MAX_TEXT, quotedMessage, conversationId } from './messages.js';
 import { createMessageActions } from './message-actions.js';
 import { createAttachments } from './attachment-view.js';
@@ -13,7 +15,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   input.placeholder = '⟡小如思念送達中······ ♡⟡'; input.setAttribute('aria-label', '消息输入框');
   input.title = `每条最多 ${MAX_TEXT} 个字符；Enter 换行，点击飞机发送。消息保存在本机`;
   const count = el('span', 'message-count');
-  let composing = false, active = true;
+  let composing = false, active = true, visibleCount=50, loadingEarlier=false;
   const extra = button('', () => attachments.open(), 'composer-button');
   extra.setAttribute('aria-label', '添加附件');
   extra.append(el('span', 'sp-fake-input-left-cv2'));
@@ -86,13 +88,22 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   function paint() {
     if (!active) return;
     const history = messenger.history(), state = messenger.draft(person.id), status = messenger.status();
-    const nearEnd = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60, previousTop = scroll.scrollTop;
+    const nearEnd = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60, previousTop = scroll.scrollTop,previousHeight=scroll.scrollHeight,growing=loadingEarlier;loadingEarlier=false;
     actions.paint(); attachments.paint();
     scroll.replaceChildren();
     if (history) {
       const messages = forPerson(history, person.id);
       if (!messages.length) scroll.append(el('p', 'directory-empty', '暂无消息'));
-      for (const message of messages) scroll.append(bubble(message));
+      const range=historyRange(wrap.ownerDocument.defaultView,history,person),sync=phoneSyncStatus(wrap.ownerDocument.defaultView),info=el('details','chat-history-info');
+      info.append(el('summary','',sync.error?'补记同步待核对':range.nearCapacity?'聊天记录接近容量上限':range.long?'长聊提示 · 查看回复范围':`回复参考 · 最近 ${range.shown} 条`));
+      info.append(el('p','',`本次手机回复带最近 ${range.shown} 条原始对话，较早 ${range.omitted} 条不作为原始聊天发送。显示条数与发送条数分开。`));
+      info.append(el('p','',range.sharing?`尚未补进正文：${range.pending} 条；已同步记录不会重复追加。`:'此人物未开启正文分享。'));
+      info.append(el('p','','千千结总结状态未确认。长聊后可回正文推进剧情；较早内容能否被记住取决于记忆配置与摘要结果。'));
+      if(sync.error){info.append(el('p','',sync.error),button('核对补记修改',()=>void messenger.syncStory(),'history-more'));}
+      if(range.nearCapacity)info.append(el('p','',`当前存档已保存 ${range.stored}/${range.max} 条，文字总容量也有限制。达到上限会停止新增，不自动删除旧消息。`));
+      scroll.append(info);
+      if(messages.length>visibleCount)scroll.append(button(`查看更早消息（还有 ${messages.length-visibleCount} 条）`,()=>{visibleCount+=50;loadingEarlier=true;paint();},'history-more'));
+      for (const message of messages.slice(-visibleCount)) scroll.append(bubble(message));
     }
     if (status.error) {
       scroll.append(el('p', 'profile-help', status.error), button('重新读取消息', () => { void messenger.refresh(); }));
@@ -114,8 +125,8 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
       const cancel = button('×', () => messenger.quote(person.id, undefined), 'quote-cancel'); cancel.setAttribute('aria-label', '取消引用');
       quoteDraft.append(el('span', '', original ? `引用：${original.text}` : '引用：原消息已删除'), cancel);
     }
-    feedback.textContent = ''; controls(); scroll.scrollTop = nearEnd ? scroll.scrollHeight : previousTop;
-    queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = nearEnd ? scroll.scrollHeight : previousTop; });
+    feedback.textContent = ''; controls(); const targetTop=growing?previousTop+scroll.scrollHeight-previousHeight:nearEnd?scroll.scrollHeight:previousTop;scroll.scrollTop=targetTop;
+    queueMicrotask(() => { if (active && scroll.isConnected) scroll.scrollTop = targetTop; });
   }
   const actions = createMessageActions({wrap, scroll, person, messenger, el, button, repaint: paint});
   const attachments = createAttachments({wrap, person, messenger, el, button});

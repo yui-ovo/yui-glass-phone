@@ -17,7 +17,7 @@ import { clockDisplay } from './phone-clock.js';
 export function createDirectory({ window: win, document: doc, navigate, icon, notify, onReplyState }) {
   const host = createProfileHost(win);
   const messenger = createMessenger(win, host);
-  const storyBridge = createStoryBridge(win, host, notify);
+  const storyBridge = createStoryBridge(win, host, notify, () => {if(session){messenger.cancelReply();return messenger.refresh();}});
   let clearMessageView;
   let session, selected, route = 'home', loadError = '', loading = false, dead = false;
   let generation = 0, controller = new AbortController(), editor, lastFormRoute = 'people', chatBack = 'messages';

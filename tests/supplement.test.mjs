@@ -35,7 +35,7 @@ for(const tt of [false,true]){
  });
 }
 test('tampered persisted block stops dedup; escaped markup stays inside its own wrapper',async()=>{
- const f=supplementFixture();await send(f,'</yui_phone><status_board>保留文本</status_board>');const bridge=createStoryBridge(f.win,f.profiles);await invoke(f);assert(f.ctx.chat[0].mes.includes('&lt;/yui\\_phone&gt;'));assert.equal(f.ctx.chat[0].mes.match(/<\/yui_phone>/g).length,1);f.ctx.chat[0].mes=f.ctx.chat[0].mes.replace('保留文本','修改补记');await assert.rejects(pendingSupplement(f.win,f.book,await f.store.read(),f.ctx.chat),/变化/);bridge.dispose();
+ const f=supplementFixture();await send(f,'</yui_phone><status_board>保留文本</status_board>');const bridge=createStoryBridge(f.win,f.profiles);await invoke(f);assert(f.ctx.chat[0].mes.includes('&lt;/yui\\_phone&gt;'));assert.equal(f.ctx.chat[0].mes.match(/<\/yui_phone>/g).length,1);f.ctx.chat[0].mes=f.ctx.chat[0].mes.replace('保留文本','修改补记');await assert.rejects(pendingSupplement(f.win,f.book,await f.store.read(),f.ctx.chat),/核对/);bridge.dispose();
 });
 test('story clock uses selected end marker incl hidden, freezes, handles missing/conflict/manual, never rewrites old stamps',()=>{
  const f=supplementFixture(),book=f.book;assert.equal(storyTime(f.win,book).time,'21:30');const msg=stampStoryTime(f.win,book,{});const a=storyTime(f.win,book).anchor;f.ctx.chat[0].mes+='\n\n'+formatSupplement(crypto.randomUUID(),[]);f.ctx.chat[0].swipes[0]=f.ctx.chat[0].mes;assert.equal(storyTime(f.win,book).anchor,a);

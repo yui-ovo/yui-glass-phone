@@ -29,7 +29,7 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
   function attempt(work, status) { try { work(); } catch (e) { status.textContent = e.message; } }
   function confirmDelete(ids) {
     const box = panel('删除消息', 'delete'), status = el('p', 'profile-status');
-    box.append(el('p', 'profile-help', `确认永久删除这 ${ids.length} 条手机消息？保存后无法恢复，后续 AI 会话也不再包含这些原消息。`),
+    box.append(el('p', 'profile-help', `确认永久删除这 ${ids.length} 条手机消息？保存后无法恢复，后续手机 AI 不再读取这些原消息；已关联的当前正文补记也会同步删除。千千结已有摘要不会自动清除。`),
       button('确认删除消息', () => attempt(() => { messenger.deleteMessages(person.id, ids); }, status), 'profile-action danger'),
       button('取消删除', closeMenu), status);
   }
@@ -84,7 +84,7 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     previousChange = own;
     selected = new Set([...selected].filter(currentMessage)); bar.hidden = !selecting; bar.replaceChildren();
     if (selecting) {
-      bar.append(el('span', '', `已选 ${selected.size} 条`), button('全选消息', () => { selected = new Set((messenger.history()?.messages || []).filter(m => m.conversationId === conversationId(person.id)).map(m => m.messageId)); repaint(); }, 'selection-button'),
+      bar.append(el('span', '', `已选 ${selected.size} 条`), button('全选当前显示', () => { selected = new Set([...scroll.querySelectorAll('[data-message-id]:not(.pending-message)')].map(row=>row.dataset.messageId)); repaint(); }, 'selection-button'),
         button(`删除所选 ${selected.size} 条`, () => { if (selected.size) confirmDelete([...selected]); }, 'selection-button danger'), button('退出多选', () => { selecting = false; selected.clear(); repaint(); }, 'selection-button'));
       for (const b of bar.querySelectorAll('button')) b.disabled = !!change;
     }

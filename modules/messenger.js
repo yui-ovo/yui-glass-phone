@@ -1,3 +1,4 @@
+import {syncPhoneChanges} from './sync-events.js';
 import { PRESETS_KEY, readPresets, selectedPreset } from './presets.js';
 import { assemblePhonePrompt } from './reply-prompt.js';
 import { createMessageStore } from './message-host.js';
@@ -44,6 +45,7 @@ export function createMessenger(win, profiles) {
       if (op.delivery ? !op.delivery.incoming : op.message.source === 'phone-manual') state.replyAfter = Date.now() + 800;
       if (op.clearAttachment && state.attachment && state.attachment.edit === op.clearAttachment.edit) { state.attachment.amount = ''; state.attachment.note = ''; state.attachment.edit++; }
       state.operation = null;
+      await syncPhoneChanges(win);
     } catch (e) { if (ticket === epoch) op.error = `${e.message || '保存未确认'}。可核对并重试，消息可能已写入。`; }
     finally { if (ticket === epoch) { op.busy = false; emit(); } }
   }
@@ -57,6 +59,7 @@ export function createMessenger(win, profiles) {
     try {
       const saved = await captured.change(op.value); if (ticket !== epoch || change !== op) return;
       history = saved; const state = draft(op.value.personId); state.editing = undefined; change = undefined;
+      await syncPhoneChanges(win);
     } catch (e) { if (ticket === epoch && change === op) op.error = `${e.message || '保存未确认'}。修改可能已写入，可核对并重试。`; }
     finally { if (ticket === epoch) { op.busy = false; emit(); } }
   }
@@ -129,7 +132,7 @@ export function createMessenger(win, profiles) {
     },
     history: () => history,
     status: () => ({ error, reading, generating: job?.id, change }), draft,
-    requestReply, cancelReply, library: () => library, sessionSignal: () => sessionSignal,
+    requestReply, cancelReply, syncStory:()=>syncPhoneChanges(win), library: () => library, sessionSignal: () => sessionSignal,
     async stickerPeople(){const captured=session,signal=sessionSignal;profiles.assertSession(captured,signal);const fresh=await profiles.load(signal);profiles.assertSession(captured,signal);if(fresh.book.id!==captured.book.id)throw Error('存档已变化');return {archiveId:fresh.book.id,people:fresh.book.people.filter(p=>!p.deletedAt).map(p=>({id:p.id,name:p.remark||p.name}))};},
     async sendSticker(id, assetId, signal) { const state = draft(id); if (state.sendingSticker) return; state.sendingSticker = true;
       try { const ticket = epoch, captured = library; const asset = await captured.get(assetId); if (ticket !== epoch || signal?.aborted) return; if (!asset || asset.hidden) throw Error('找不到可用的表情包'); deliver(id, [stickerPayload(asset)]); }

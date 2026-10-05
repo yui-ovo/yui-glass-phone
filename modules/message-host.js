@@ -1,3 +1,4 @@
+import {applyReconciliation} from './supplement-reconcile.js';
 import { ttStore, ttHost } from './host.js';
 import { clone, sameJson } from './contacts.js';
 import { newHistory, validateHistory, appendMessage, messagePersonId, applyChange, changeFingerprint, applyDelivery } from './messages.js';
@@ -24,7 +25,7 @@ export function createMessageStore(win, profiles, session, signal) {
       const previous = await read();
       const next = transform(previous);
       if (sameJson(next, previous)) return previous; // Confirm an already committed operation without rewriting.
-      if (!fresh.book.people.some(p => p.id === personId && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
+      if (personId!==null && !fresh.book.people.some(p => p.id === personId && p.relation.friend && !p.deletedAt)) throw Error('对方已不在本存档好友中，未写入消息');
       guard();
       // Recheck immediately before dispatch. Web Locks serialize cooperating windows.
       const latest = await read(); if (!sameJson(latest, previous)) throw Error('消息在保存前发生变化，请重新读取，未覆盖');
@@ -38,7 +39,7 @@ export function createMessageStore(win, profiles, session, signal) {
       return confirmed;
     });
   }
-  return { read, send: (message, expectedRevision) => commit(messagePersonId(message), previous => appendMessage(previous, message, expectedRevision)),
+  return { read, reconcile: operation => commit(null, previous => applyReconciliation(previous, operation)), send: (message, expectedRevision) => commit(messagePersonId(message), previous => appendMessage(previous, message, expectedRevision)),
     async change(operation) { const fingerprint = await changeFingerprint(operation); guard(); return commit(operation.personId, previous => applyChange(previous, operation, fingerprint)); },
     async deliver(operation) { const fingerprint = await changeFingerprint(operation); guard(); return commit(operation.personId, previous => applyDelivery(previous, operation, fingerprint)); },
   };
