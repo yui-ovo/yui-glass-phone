@@ -103,3 +103,18 @@ TT 固定接口基线 2.2.0，commit `9693a4ec47cd4552f90878bccab453f176de0f18`�
 - GENERATION_AFTER_COMMANDS 是被宿主等待的生成前事件。通过 setExtensionPrompt 设置 IN_CHAT=1、depth=0、SYSTEM=0、scan=false，并提供异步有效性过滤。使用本扩展独立 key；生成结束/停止/切档/禁用删除该 key，不清空其他扩展内容。
 - 仅开启对应人物开关才读取/分享。没有调用宿主生成 API、写入正文楼层、修改预设，TT 无新增 ST HTTP 请求。正文引用由酒馆下一次生成带给其 API；手机回复继续使用独立 API。
 - 此前版本“不读取正文”的说明只适用于此前版本。本版默认仍关闭，只按当前人物授权读取当前已加载正文；源码核对和模拟测试不等于真机验收，也不构成分支回滚支持。
+
+
+## 0.11.1 自有配套文件
+
+按用户选择仅服务现有功能，独立撰写 extras 世界书和正则；没有复制用户提供的柚月世界书内容、宏名、标签协议或代码。参考的是分开管理线上补充规则、正文参考与显示过滤的职责。
+
+宿主正则格式核对 ST 固定基线 06bde939fb1e9c4c8d8641d810f0a916b5bce127 的 [导入器](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/extensions/regex/index.js) 与 [engine](https://github.com/SillyTavern/SillyTavern/blob/06bde939fb1e9c4c8d8641d810f0a916b5bce127/public/scripts/extensions/regex/engine.js)：支持数组 JSON，markdownOnly 与 promptOnly 分别控制显示和模型输入。仅显示规则不代表真正删除存档；本次不发布 promptOnly 删除规则，避免滤掉本次注入的参考。TT 完整正则导入待真机确认。
+
+含隐藏正文是用户在本轮明确变更的读取规则；原 0.11.0 过滤隐藏的说明保留为版本历史，不再代表新代码行为。
+
+## 0.12.0 手机预设
+
+预设模型、编辑器和共享请求组装由本项目实现。读取用户提供的“內建默認 ✦.nuopreset.json”确认 __nuojijiChatPreset、blocks、marker、injection 结构；文件含 22 个 marker，没有文字条目，不复制或臆造来源应用内置提示词。format 仅对应 Yui 已有协议，其余标记作为未映射说明。没有加载对方代码或执行附带正则。
+
+0.11.1 线上世界书草稿未发布，按用户选择改为预设管理并移除该草稿。默认预设、静态正文书和显示正则为本项目原创；当前没有全局宏注册或变量书替换能力。

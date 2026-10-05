@@ -1215,3 +1215,14 @@ h1, h2, p { margin: 0; }
 .sticker-import-count { color:#c6bed3; font-size:10px; line-height:1.6; margin:9px 0; }
 .sticker-import-errors { font-size:10px; color:#d7b6bf; margin:9px 0; }
 .sticker-import-errors p { font-size:10px; line-height:1.5; overflow-wrap:anywhere; margin:6px 0; }
+
+/* Preset editor stays inside the phone shadow root. */
+.preset-actions { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.preset-actions .profile-action { width:auto; flex:1 1 28%; font-size:12px; min-height:36px; margin:0; padding:7px; }
+.preset-import:empty { display:none; }
+.preset-import { max-height:280px; overflow:auto; border:1px solid var(--line, #ffffff20); border-radius:16px; padding:10px; }
+.preset-preview .profile-material { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
+.preset-block textarea { min-height:120px; }
+
+.preset-select { display:block; width:100%; min-height:42px; margin:8px 0; padding:8px 10px; background:#303038; color:#ece9f0; border:1px solid #ffffff20; border-radius:12px; font-family:inherit; font-size:16px; }
+.preset-block .profile-check input { accent-color:#b5a8c4; }

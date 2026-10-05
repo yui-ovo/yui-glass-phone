@@ -1,0 +1,16 @@
+{
+  "yuiPhonePreset": 1,
+  "name": "Yui 默认",
+  "blocks": [
+    {
+      "id": "builtin-style",
+      "type": "text",
+      "name": "聊天风格",
+      "content": "采用自然的手机聊天表达，少写旁白和动作描写。语气和回复长短符合人物性格，线上聊天习惯优先采用线上人设。",
+      "role": "system",
+      "enabled": true
+    }
+  ],
+  "unsupported": [],
+  "attribution": []
+}

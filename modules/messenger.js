@@ -1,9 +1,11 @@
+import { PRESETS_KEY, readPresets, selectedPreset } from './presets.js';
+import { assemblePhonePrompt } from './reply-prompt.js';
 import { createMessageStore } from './message-host.js';
 import { createMessage, createReply, createChange, conversationId, createDelivery, applyDelivery, changeFingerprint } from './messages.js';
-import { kindOf, parseReply, stickerPayload, transferPayload, ACTION_PROTOCOL } from './rich-messages.js';
+import { kindOf, parseReply, stickerPayload, transferPayload } from './rich-messages.js';
 import { createStickerLibrary } from './stickers.js';
 import { sameJson } from './contacts.js';
-import { readConfig, replyContext, buildPrompt, apiRequest } from './ai.js';
+import { readConfig, replyContext, apiRequest } from './ai.js';
 
 // In-memory drafts are scoped to the active archive; only confirmed records enter history.
 export function createMessenger(win, profiles) {
@@ -73,7 +75,7 @@ export function createMessenger(win, profiles) {
     const current = () => ticket === epoch && job === task && !controller.signal.aborted;
     try {
       profiles.assertSession(captured, signal);
-      const config = readConfig(win), fresh = await profiles.load(signal);
+      const config = readConfig(win), presetState = readPresets(win, config), preset = selectedPreset(presetState.library), fresh = await profiles.load(signal);
       if (!current()) return;
       if (fresh.book.id !== captured.book.id || fresh.account !== captured.account) throw Error('存档身份已变化');
       const person = fresh.book.people.find(p => p.id === id && p.relation.friend && !p.deletedAt);
@@ -82,12 +84,11 @@ export function createMessenger(win, profiles) {
       if (!current()) return;
       const catalog = win.indexedDB ? await library.available(captured.book.id, id) : [];
       if (!current()) return;
-      const prompt = buildPrompt(context, initial, id, config.historyCount, config.prompt, config.frontPrompt);
-      prompt.push({ role: 'system', content: ACTION_PROTOCOL });
-      prompt.push({ role: 'user', content: JSON.stringify({ availableStickers: catalog.map(({id,description,category}) => ({id,description,category})), pendingTransfers: initial.messages.filter(m => m.conversationId === conversationId(id) && kindOf(m) === 'transfer' && m.transfer.state === 'pending' && m.sender.kind === 'self').map(m => ({messageId:m.messageId, ...m.transfer})) }) });
-      if (JSON.stringify(prompt).length > 180000) throw Error('参考内容过长，请减少表情包授权或历史条数');
+      const prompt = assemblePhonePrompt(context, initial, id, config, catalog, preset);
       const text = await apiRequest(win, config, 'reply', prompt, controller.signal);
       if (!current()) return;
+      if(win.localStorage.getItem(PRESETS_KEY)!==presetState.raw)throw Error('聊天预设已变化，本次回复未保存，请重新请求');
+      const currentConfig=readConfig(win);if(presetState.raw===null&&(currentConfig.prompt!==config.prompt||currentConfig.frontPrompt!==config.frontPrompt))throw Error('原有提示词已变化，本次回复未保存');
       const parsed = parseReply(text, catalog);
       profiles.assertSession(captured, signal);
       const latest = await profiles.load(signal); if (!current()) return;
@@ -104,6 +105,7 @@ export function createMessenger(win, profiles) {
         applyDelivery(history, delivery, await changeFingerprint(delivery)); if (!current()) return;
         state.operation = { delivery, message: delivery.messages[0], busy: false, error: '' };
       } else state.operation = { message: createReply(history.archiveId, id, parsed.messages[0].text, (history.messages.at(-1)?.sequence || 0) + 1), revision: history.revision, busy: false, error: '' };
+      if(win.localStorage.getItem(PRESETS_KEY)!==presetState.raw){state.operation=null;throw Error('聊天预设已变化，本次回复未保存，请重新请求');}
       job = undefined;
       await execute(id); // Saving retries reuse this reply, never call AI again.
     } catch (e) { if (current()) state.aiError = e.message || '回复失败，请重试'; }

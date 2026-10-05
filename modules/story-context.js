@@ -1,6 +1,7 @@
 import { defaultStoryPolicy, validateStoryPolicy } from './contacts.js';
 import { forPerson } from './messages.js';
 import { kindOf, summary } from './rich-messages.js';
+import { stripPhoneReference } from './reference-format.js';
 
 export const storyPolicy = person => validateStoryPolicy(person.storyContext || defaultStoryPolicy());
 export function readStoryContext(win, person) {
@@ -9,20 +10,20 @@ export function readStoryContext(win, person) {
   if(!policy.readStory)return undefined;
   const ctx=win.SillyTavern?.getContext();
   if(!ctx?.chatId || !Array.isArray(ctx.chat))throw Error('宿主未提供当前正文消息，未读取剧情');
-  const messages=[];let remaining=30000,truncated=false;
+  const messages=[];let remaining=30000,truncated=false,hiddenCount=0;
   for(let i=ctx.chat.length-1;i>=0 && messages.length<policy.storyCount;i--){
     const m=ctx.chat[i];
-    if(!m || typeof m.is_system!=='boolean')throw Error('无法确认正文楼层的隐藏状态，已停止读取');
-    if(m.is_system || m.is_hidden===true || m.hidden===true || m.extra?.hidden===true || m.role==='tool' || m.extra?.tool_invocations)continue;
+    if(!m || m.role==='tool' || m.role==='system' || m.role==='developer' || m.extra?.tool_invocations || m.isPhoneMessage || m.isGaigaiPrompt || m.isGaigaiData)continue;
     if(typeof m.mes!=='string' || typeof m.is_user!=='boolean')throw Error('正文消息格式不支持，已停止读取');
-    if(!m.mes.trim())continue;
+    const body=stripPhoneReference(m.mes);if(!body)continue;
     if(!remaining){truncated=true;break;}
-    const text=m.mes.slice(0,Math.min(10000,remaining));if(text.length<m.mes.length)truncated=true;
+    const text=body.slice(0,Math.min(10000,remaining));if(text.length<body.length)truncated=true;
     remaining-=text.length;
+    if(m.is_system===true || m.is_hidden===true || m.hidden===true || m.extra?.hidden===true)hiddenCount++;
     // mes is the active swipe. Never collect alternatives or attachment bodies.
     messages.unshift({name:typeof m.name==='string'?m.name.slice(0,200):m.is_user?'用户':'人物',role:m.is_user?'user':'character',text});
   }
-  return {requested:policy.storyCount,count:messages.length,truncated,messages};
+  return {requested:policy.storyCount,count:messages.length,hiddenCount,truncated,messages};
 }
 
 export function phoneStoryReference(book, history, personId) {

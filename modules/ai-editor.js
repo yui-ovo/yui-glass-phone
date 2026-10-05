@@ -2,7 +2,7 @@ import { clone, sameJson, validateMaterials } from './contacts.js';
 import { worldbookChoices, importWorldbook, worldbookLabel, phoneWorldbooks, addPhoneWorldbook, removePhoneWorldbook } from './worldbooks.js';
 import { AI_KEY, DEFAULT_PROMPT, defaultConfig, readConfig, saveConfig, apiRequest, currentPersona, materialKey, worldEntries, materialSnapshot } from './ai.js';
 
-export function apiSettings({ win, base, el, button }) {
+export function apiSettings({ win, base, el, button, openPresets }) {
   const { wrap, scroll } = base('独立 API', 'settings');
   let draft, error = '', active = true, task, savedRaw;
   try { savedRaw = win.localStorage.getItem(AI_KEY); } catch { error = '无法读取本机设置存储'; }
@@ -24,12 +24,7 @@ export function apiSettings({ win, base, el, button }) {
   const tokens = field(advanced, '输出长度上限', 'maxTokens', 'number'); tokens.min = '64'; tokens.max = '8192';
   const count = field(advanced, '携带最近消息条数', 'historyCount', 'number'); count.min = '1'; count.max = '200'; scroll.append(advanced);
   const timeout = field(advanced, '等待时间（秒）', 'timeoutSeconds', 'number'); timeout.min = '30'; timeout.max = '600';
-  const frontSection=el('details','profile-trace');frontSection.append(el('summary','','前置提示词（选填）'),el('p','profile-help','放在手机请求最前面，用于你的通用要求。留空也可使用。'));
-  const frontLabel=el('label','profile-label','前置提示词'),front=el('textarea');front.rows=5;front.maxLength=12000;front.value=draft.frontPrompt;front.setAttribute('aria-label','前置提示词');front.oninput=()=>{draft.frontPrompt=front.value;status.textContent='前置提示词尚未保存';};frontLabel.append(front);frontSection.append(frontLabel);scroll.append(frontSection);
-  const promptSection = el('details', 'profile-trace'); promptSection.append(el('summary', '', '聊天风格提示词'), el('p', 'profile-help', '独立用于手机聊天，不读取酒馆正文预设。这里设置通用聊天风格，每个人的习惯仍填在人物的线上人设中。保存 API 设置后生效。'));
-  const label = el('label', 'profile-label', '提示词内容'), prompt = el('textarea'); prompt.rows = 8; prompt.maxLength = 12000; prompt.value = draft.prompt; prompt.setAttribute('aria-label', '提示词内容');
-  prompt.oninput = () => { draft.prompt = prompt.value; status.textContent = '提示词尚未保存'; }; label.append(prompt);
-  promptSection.append(label, button('恢复默认提示词', () => { prompt.value = DEFAULT_PROMPT; draft.prompt = DEFAULT_PROMPT; status.textContent = '默认提示词已填入，保存后生效'; })); scroll.append(promptSection);
+  scroll.append(button('管理聊天预设',openPresets),el('p','profile-help','前置要求和聊天风格统一在聊天预设中编辑。旧自定义提示词会保留为“原有提示词”；首次保存预设后使用预设库。'));
   async function run(kind) {
     if (task) return; const controller = new AbortController(); task = controller; status.textContent = kind === 'models' ? '正在读取模型…' : '正在测试连接…';
     try {

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "f867e422-8b18-4fd2-a07e-93fdd77b845b",
+    "scriptName": "Yui · 隐藏误回显的手机参考区块（仅显示）",
+    "findRegex": "/^<(yui_phone_reference_v1)>\\r?\\n[\\s\\S]*?\\r?\\n<\\/\\1>[ \\t]*(?:\\r?\\n|$)|^&lt;(yui_phone_reference_v1)&gt;\\r?\\n[\\s\\S]*?\\r?\\n&lt;\\/\\2&gt;[ \\t]*(?:\\r?\\n|$)/gm",
+    "replaceString": "",
+    "trimStrings": [],
+    "placement": [
+      2
+    ],
+    "disabled": false,
+    "markdownOnly": true,
+    "promptOnly": false,
+    "runOnEdit": true,
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": null
+  }
+]

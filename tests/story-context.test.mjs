@@ -8,12 +8,12 @@ import {createMessageStore} from '../modules/message-host.js';
 import {createStoryBridge,STORY_PROMPT_KEY} from '../modules/story-bridge.js';
 const policy=(extra={})=>({...defaultStoryPolicy(),...extra});
 const visible=(mes,is_user=false)=>({mes,name:is_user?'我':'角色',is_user,is_system:false});
-test('story reads are opt-in, exclude hidden before counting and use active message instead of alternate swipes',()=>{
- const ctx={chatId:'A',chat:[visible('旧'),visible('当前分支'),{is_system:true,get mes(){throw Error('hidden body accessed');}}, {...visible('最新'),swipes:['另一分支秘密','最新'],swipe_id:1}]};
+test('story reads are opt-in, include hidden body before counting and use active message instead of alternate swipes',()=>{
+ const ctx={chatId:'A',chat:[visible('旧'),visible('当前分支'),{is_system:true,is_user:false,mes:'隐藏剧情'}, {...visible('最新'),swipes:['另一分支秘密','最新'],swipe_id:1}]};
  const win={SillyTavern:{getContext:()=>ctx}},person=newPerson();const before=ctx.chat[1].mes;
  assert.equal(readStoryContext({SillyTavern:{getContext(){throw Error('off must not access host');}}},person),undefined);
- person.storyContext=policy({readStory:true,storyCount:2});const result=readStoryContext(win,person);assert.deepEqual(result.messages.map(m=>m.text),['当前分支','最新']);assert(!JSON.stringify(result).includes('另一分支秘密'));assert.equal(ctx.chat[1].mes,before);
- ctx.chat.push({mes:'未知隐藏标记',is_user:false});assert.throws(()=>readStoryContext(win,person),/隐藏/);
+ person.storyContext=policy({readStory:true,storyCount:2});const result=readStoryContext(win,person);assert.deepEqual(result.messages.map(m=>m.text),['隐藏剧情','最新']);assert(!JSON.stringify(result).includes('另一分支秘密'));assert.equal(ctx.chat[1].mes,before);
+ assert.equal(result.hiddenCount,1);ctx.chat.push({mes:'无隐藏标记的正文',is_user:false});assert.equal(readStoryContext(win,person).messages.at(-1).text,'无隐藏标记的正文');
  ctx.chat=[visible('字'.repeat(40000))];assert(readStoryContext(win,person).truncated);assert.equal(readStoryContext(win,person).messages[0].text.length,10000);
 });
 test('sharing exports only enabled friends, latest records, no cross-contact messages or deleted people',()=>{

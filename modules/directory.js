@@ -1,3 +1,4 @@
+import { presetSettings } from './preset-editor.js';
 import { clone, displayName, newPerson, sameJson } from './contacts.js';
 import { readAvatar, loadAvatarUrl } from './avatar.js';
 import { createProfileHost } from './host.js';
@@ -211,7 +212,8 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
   }
   function render(target) {
     route = target; clearEditor(); clearMessageView?.(); clearMessageView = undefined;
-    if (target === 'ai-settings') { const view = apiSettings({ win, base, el, button }); editor = view.editor; return view.wrap; }
+    if (target === 'preset-settings') { const view = presetSettings({win,profiles:host,base,el,button}); editor=view.editor; return view.wrap; }
+    if (target === 'ai-settings') { const view = apiSettings({ win, base, el, button, openPresets:()=>go('preset-settings') }); editor = view.editor; return view.wrap; }
     if (target === 'moments') { const { wrap, scroll } = base('朋友圈'); empty(scroll, '朋友圈功能尚未接入'); return wrap; }
     if (!session) {
       const { wrap, scroll } = base(({ messages: '消息', contacts: '联系人', me: '我', people: '人物管理' })[target] || '人物资料');
@@ -310,7 +312,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, handles: target => ['ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
+  return { render, handles: target => ['preset-settings', 'ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
     suspend() { messenger.cancelReply(); editor?.suspend?.(); },
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },

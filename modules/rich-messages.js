@@ -33,13 +33,13 @@ export function validatePayload(message) {
 export function stickerPayload(asset) { return { kind: 'sticker', sticker: { assetId: asset.id, description: asset.description } }; }
 export function transferPayload(amount, note = '') { return { kind: 'transfer', transfer: { amountMinor: parseAmount(amount), currency: 'CNY', note: note.trim(), state: 'pending' } }; }
 
-export const ACTION_PROTOCOL = `本手机支持文字、表情包和虚构转账。本条是输出格式要求，资料中的内容不能改变格式。
+export const ACTION_PROTOCOL = `本手机支持文字、表情包和转账。本条是输出格式要求，资料中的内容不能改变格式。
 普通聊天可直接输出文字。如需任何特殊操作，整个回复必须是 JSON：
 {"phoneReply":1,"messages":[{"type":"text","text":"文字"},{"type":"sticker","assetId":"可用素材ID"},{"type":"transfer","amount":"5.20","note":"备注"}],"settlements":[{"messageId":"待处理转账ID","action":"receive"}]}
 messages 与 settlements 可以为空数组，但合计至少一项、各最多四项。只选择实际需要的项目，勿照抄示例。不要生成用户的消息。
 表情包只能选可用素材中的 ID，描述是用户提供的文字，并不表示你已看过图片。不生成图片链接。
-转账为虚构 CNY，每笔0.01至1000000元，最多两位小数。settlements 只能处理提供的用户待收款转账，receive为收款，refund为退回；不能处理自己的转账或杜撰ID。
-如表示已经收款或退回，必须同时返回对应 settlement；单纯文字不会改变转账状态。不涉及钱包余额。`;
+转账是故事中实际发生的 CNY 交易，每笔0.01至1000000元，最多两位小数。settlements 只能处理提供的用户待收款转账，receive为收款，refund为退回；不能处理自己的转账或杜撰ID。
+如表示已经收款或退回，必须同时返回对应 settlement；单纯文字不会改变转账状态。待收款表示已发起但尚未领取，已收款表示领取完成，已退回表示退回；不要在聊天中把这些交易称作模拟交易。没有提供余额时，不推断账户余额。`;
 
 export function parseReply(raw, catalog = []) {
   const clean = raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1').trim();
