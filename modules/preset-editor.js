@@ -38,7 +38,7 @@ export function presetSettings({win,profiles,base,el,button}){
    content.append(button('删除此预设',()=>safe(()=>{if(p.id===draft.activeId&&!replacement.value)throw Error('先选择删除后使用的替代预设');if(!win.confirm('删除此预设？保存设置后生效。'))return;if(p.id===draft.activeId)draft.activeId=replacement.value;draft.presets=draft.presets.filter(x=>x.id!==p.id);viewId=draft.activeId;changed();render();})));
   }
   if(p.attribution.length)content.append(el('p','profile-help','来源记录：'+p.attribution.join('；')));
-  content.append(el('h2','section-label','自定义条目'));
+  content.append(el('h2','section-label','自定义条目'),el('p','profile-help','支持 {{user}}（当前用户人设名）和 {{char}}（聊天人物名）。每个预设最多 20 万字符，只有启用的条目进入请求。')); 
   p.blocks.forEach((b,index)=>{
    const row=el('details','profile-trace preset-block');row.open=opened.has(b.id);row.ontoggle=()=>{if(row.open)opened.add(b.id);else opened.delete(b.id);};row.append(el('summary','',`${index+1}. ${b.name} · ${b.enabled?'启用':'关闭'}`));
    const label=el('label','profile-check','启用此条目'),check=el('input');check.type='checkbox';check.checked=b.enabled;check.disabled=locked;check.setAttribute('aria-label','启用条目：'+b.name);check.onchange=()=>{b.enabled=check.checked;changed();row.querySelector('summary').textContent=`${index+1}. ${b.name} · ${b.enabled?'启用':'关闭'}`;};label.prepend(check);row.append(label);

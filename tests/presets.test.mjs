@@ -31,3 +31,26 @@ test('save failure keeps previous library; conflicts rejected and previous versi
  const second=savePresets(win,d,first.raw);assert.equal(win.data.get(PRESETS_BACKUP_KEY),first.raw);assert.throws(()=>savePresets(win,d,first.raw),/其他窗口/);assert.equal(win.data.get(PRESETS_KEY),second.raw);
  win.data.set(PRESETS_KEY,'bad');assert.throws(()=>readPresets(win));assert.equal(win.data.get(PRESETS_KEY),'bad');
 });
+
+test('nuopreset custom blocks preserve text, roles, switches and order above the old 100k limit',()=>{
+ const blocks=Array.from({length:76},(_,i)=>({id:'custom-'+i,type:'custom',name:'条目'+i,content:i%2?'{{user}} 对 {{char}}：'+'字'.repeat(1800):'字'.repeat(1700),role:['system','user','assistant'][i%3],enabled:i<35,injection:{position:'relative',depth:0}}));
+ const markers=Array.from({length:21},(_,i)=>({id:'marker-'+i,type:'marker',key:i===20?'format':'foreign-'+i}));
+ const {preset}=importPreset(JSON.stringify({__nuojijiChatPreset:true,name:'大型格式夹具',mode:'online',blocks:[...blocks,...markers]}));
+ assert(preset.blocks.reduce((n,b)=>n+b.content.length,0)>100000);assert.equal(preset.unsupported.length,20);
+ const fields=b=>({name:b.name,content:b.content,role:b.role,enabled:b.enabled});assert.deepEqual(preset.blocks.map(fields),blocks.map(fields));
+ const win=storage(),library=createLibrary();library.presets.push(preset);library.activeId=preset.id;savePresets(win,library,null);assert.deepEqual(readPresets(win).library.presets[1].blocks.map(fields),blocks.map(fields));assert.deepEqual(importPreset(exportPreset(preset)).preset.blocks.map(fields),blocks.map(fields));
+});
+test('name variables use the current context without recursive substitution or stored text changes',()=>{
+ const {preset}=importPreset(JSON.stringify({__nuojijiChatPreset:true,name:'名称',blocks:[{type:'custom',content:'{{user}} / {{char}} / {{user}}',enabled:true}]}));
+ assert.equal(preset.blocks[0].enabled,true);const original=preset.blocks[0].content;
+ assert.equal(presetMessages(preset,{user:{name:'甲$&{{char}}'},character:{name:'乙<img>'}})[0].content,'甲$&{{char}} / 乙<img> / 甲$&{{char}}');
+ assert.equal(presetMessages(preset,{user:{name:'新用户'},character:{name:'新人物'}})[0].content,'新用户 / 新人物 / 新用户');assert.equal(preset.blocks[0].content,original);
+ assert.throws(()=>presetMessages(preset,{user:{name:'用户'}}),/无法确认/);
+ const {preset:unknown}=importPreset(JSON.stringify({__nuojijiChatPreset:true,name:'未知',blocks:[{type:'custom',content:'{{user}} {{foreign}}',enabled:true}]}));assert.equal(unknown.blocks[0].enabled,false);
+ assert.throws(()=>importPreset(JSON.stringify({yuiPhonePreset:1,name:'invalid',blocks:[{type:'custom',content:'不能冒充原生格式'}]})),/未知条目/);
+});
+test('larger preset storage still stops over-limit requests and does not truncate text',()=>{
+ const p=copyPreset(builtinPreset());p.blocks=Array.from({length:20},()=>textBlock('正文','字'.repeat(10000)));const library=createLibrary();library.presets.push(p);validateLibrary(library);
+ assert.throws(()=>assemblePhonePrompt({character:{name:'人物'},user:{name:'用户'}},newHistory('a'),'p',defaultConfig(),[],p),/过长/);
+ p.blocks[0].content+='字';assert.throws(()=>validateLibrary(library),/20 万/);assert.equal(p.blocks[0].content.length,10001);
+});

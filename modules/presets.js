@@ -1,6 +1,9 @@
 import { clone, record, sameJson } from './contacts.js';
 export const PRESETS_KEY='yui-glass-phone.presets.v1';
 export const PRESETS_BACKUP_KEY=PRESETS_KEY+'.backup';
+export const MAX_PRESET_TEXT=200000;
+const NAME_VARIABLE=/\{\{(user|char)\}\}/g;
+const unknownVariables=content=>/\{\{[^{}]+\}\}/.test(content.replace(NAME_VARIABLE,''));
 export const PRESET_STYLE='采用自然的手机聊天表达，少写旁白和动作描写。语气和回复长短符合人物性格，线上聊天习惯优先采用线上人设。';
 export const FIXED_BLOCKS=[
  {key:'context',name:'人物与参考资料',description:'来源角色卡、线上人设、当前用户人设、勾选世界书及按人物开启的正文参考。'},
@@ -20,7 +23,8 @@ export function validatePreset(p){
  if(!record(p)||!text(p.id,128,true)||!text(p.name,80,true)||!Array.isArray(p.blocks)||p.blocks.length>80||!Array.isArray(p.unsupported)||p.unsupported.length>100||!Array.isArray(p.attribution)||p.attribution.length>30)throw Error('预设格式不支持，未保存');
  const ids=new Set();let size=0;
  for(const b of p.blocks){if(!record(b)||!text(b.id,128,true)||ids.has(b.id)||b.type!=='text'||!text(b.name,100,true)||!text(b.content,12000)||!['system','user','assistant'].includes(b.role)||typeof b.enabled!=='boolean')throw Error('预设条目无效或 ID 重复');ids.add(b.id);size+=b.content.length;}
- if(size>100000||p.unsupported.some(x=>!text(x,500))||p.attribution.some(x=>!text(x,300)))throw Error('预设内容过长');
+ if(size>MAX_PRESET_TEXT)throw Error('每个预设的文字总量最多 20 万字符（含关闭条目），未截断内容');
+ if(p.unsupported.some(x=>!text(x,500))||p.attribution.some(x=>!text(x,300)))throw Error('预设内容过长');
  return p;
 }
 export function validateLibrary(l){
@@ -63,13 +67,15 @@ export function importPreset(raw){
    if(key==='format'){report.push('format 使用 Yui 固定功能协议，不读取原手机内置正文');continue;}
    p.unsupported.push(('未映射占位项：'+key+'（原文件没有提示词正文）').slice(0,500));continue;
   }
-  if(b.type!=='text'||typeof b.content!=='string')throw Error('未知条目类型，尚未导入');
+  if(!(b.type==='text'||v.__nuojijiChatPreset===true&&b.type==='custom')||typeof b.content!=='string')throw Error('未知条目类型或缺少文字正文，尚未导入');
   const name=String(b.name||b.title||'导入条目').slice(0,100),block={...textBlock(name,b.content),role:b.role||'system',enabled:b.enabled!==false};
   if(v.__nuojijiChatPreset && b.injection && (b.injection.position!=='relative'||Number(b.injection.depth)!==0)){block.enabled=false;p.unsupported.push('条目“'+name+'”的深度位置不支持；文字保留为关闭条目，请编辑确认');}
-  if(/\{\{[^{}]+\}\}/.test(b.content)){block.enabled=false;p.unsupported.push('条目“'+name+'”含未解析变量；关闭导入，请替换为实际文字');}
+  if(unknownVariables(b.content)){block.enabled=false;p.unsupported.push('条目“'+name+'”含未解析变量；关闭导入，请替换为实际文字');}
   p.blocks.push(block);
  }
  if(v.regexRules?.length)report.push('附带正则未执行或安装，请在原应用查看用途');if(record(v.params)&&Object.keys(v.params).length)report.push('附带模型参数未覆盖当前 API 设置');
+ if(p.blocks.some(b=>/\{\{(?:user|char)\}\}/.test(b.content)))report.push('{{user}} 和 {{char}} 在请求时分别替换为当前用户人设名、聊天人物名；原条目文字保留');
+ if(v.__nuojijiChatPreset)report.push('文字条目按原顺序排列；Yui 的固定资料与功能仍放在自定义条目之后，不复刻原手机 marker 的插入位置');
  validatePreset(p);report.unshift(`可编辑文字 ${p.blocks.length} 条，暂不支持 ${p.unsupported.length} 项`);return {preset:p,report};
 }
-export function presetMessages(p){validatePreset(p);return p.blocks.filter(b=>b.enabled&&b.content.trim()).map(b=>({role:b.role,content:b.content}));}
+export function presetMessages(p,context){validatePreset(p);return p.blocks.filter(b=>b.enabled&&b.content.trim()).map(b=>({role:b.role,content:context?b.content.replace(NAME_VARIABLE,(_match,key)=>{const name=key==='user'?context.user?.name:context.character?.name;if(typeof name!=='string')throw Error('无法确认预设变量对应的人物名字，未发起请求');return name;}):b.content}));}

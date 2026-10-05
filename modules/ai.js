@@ -96,7 +96,7 @@ export function replyContext(win, book, person) {
 export function buildPrompt(context, history, personId, historyCount, prompt = DEFAULT_PROMPT, frontPrompt = '', preset) {
   const data = JSON.stringify(context);
   const messages = [
-    ...(preset ? presetMessages(preset) : [...(frontPrompt.trim() ? [{ role:'system', content:frontPrompt }] : []), { role: 'system', content: prompt }]),
+    ...(preset ? presetMessages(preset,context) : [...(frontPrompt.trim() ? [{ role:'system', content:frontPrompt }] : []), { role: 'system', content: prompt }]),
     { role: 'system', content: PHONE_SYSTEM_RULES },
     { role: 'user', content: `以下 JSON 是本次用户明确选择的参考资料：\n${data}` },
     ...forPerson(history, personId).slice(-historyCount).map(m => {
