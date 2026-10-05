@@ -1216,13 +1216,72 @@ h1, h2, p { margin: 0; }
 .sticker-import-errors { font-size:10px; color:#d7b6bf; margin:9px 0; }
 .sticker-import-errors p { font-size:10px; line-height:1.5; overflow-wrap:anywhere; margin:6px 0; }
 
-/* Preset editor stays inside the phone shadow root. */
-.preset-actions { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
-.preset-actions .profile-action { width:auto; flex:1 1 28%; font-size:12px; min-height:36px; margin:0; padding:7px; }
+/* Compact phone preset library and editor; scoped to this page only. */
+.preset-manager .toolbar { min-height:42px; }
+.preset-manager .toolbar h1 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; letter-spacing:0; }
+.preset-back { width:38px; height:36px; flex-shrink:0; color:#c9c4d2; font-size:25px; }
+.preset-save { min-width:46px; height:30px; padding:0 10px; border-radius:9px; border:1px solid #d4cce72b; background:#c1b3d222; color:#dbd3e6; font-size:11px; }
+.preset-save.is-dirty { background:#c6b8d844; border-color:#d4cce759; }
+.preset-manager > .profile-status { flex-shrink:0; margin:0; padding:5px 14px 0; min-height:18px; font-size:9px; line-height:1.5; }
+.preset-manager .directory-scroll { padding:8px 12px 16px; }
+.preset-manager .preset-tools { display:flex; gap:6px; align-items:center; margin-bottom:9px; }
+.preset-button { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:5px 10px; color:#cec8d8; font:inherit; font-size:11px; line-height:1.4; border:1px solid #ffffff16; border-radius:9px; background:#ffffff05; }
+.preset-button:disabled { opacity:.46; cursor:default; }
+.preset-button.danger { color:#d7a9b5; }
+.preset-button:focus-visible, .preset-card-main:focus-visible, .preset-row-head:focus-visible { outline:1px solid #c5b7de; outline-offset:2px; }
+.preset-use { color:#d8cdeb; border-color:#c4b6d62b; background:#b4a3cc16; }
+.preset-use:disabled { opacity:.85; }
+.preset-card { display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:8px; border:1px solid #ffffff14; border-radius:14px; background:linear-gradient(130deg,#ffffff09,#ffffff03); }
+.preset-card.is-active { border-color:#b6a4cf66; box-shadow:inset 0 0 0 2px #c2b4da0a; }
+.preset-card-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; text-align:left; padding:5px 0; }
+.preset-card-main strong { font-size:12px; font-weight:550; line-height:1.5; color:#e1dce7; overflow-wrap:anywhere; }
+.preset-card-main small { font-size:9px; line-height:1.5; color:#a9a1b7; }
+.preset-card .preset-use { flex-shrink:0; padding:4px 8px; font-size:10px; }
+.preset-more { position:relative; margin-left:auto; z-index:4; }
+.preset-more > summary { list-style:none; font-size:18px; width:32px; padding:0; cursor:pointer; }
+.preset-more > summary::-webkit-details-marker { display:none; }
+.preset-popover { position:absolute; right:0; top:36px; width:190px; max-height:290px; overflow:auto; padding:5px; border:1px solid #ffffff24; border-radius:12px; background:#30303af7; box-shadow:0 8px 22px #0005; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.preset-popover > .preset-button { display:flex; width:100%; justify-content:flex-start; border:0; background:transparent; min-height:34px; }
+.preset-popover .preset-button:hover { background:#ffffff0a; }
+.preset-manage { padding:7px; color:#c4bccf; font-size:11px; }
+.preset-manage > summary { cursor:pointer; padding:3px 0; }
+.preset-search { height:32px; overflow:hidden; margin:4px 0 8px; border:1px solid #ffffff16; border-radius:10px; background:#ffffff05; }
+.preset-search input { display:block; width:123.076923%; height:39px; margin:0; padding:0 11px; background:transparent; border:0; color:#d6cfdf; font:inherit; font-size:16px; transform:scale(.8125); transform-origin:top left; outline:none; }
+.preset-search:focus-within { border-color:#c6b8dc66; }
+.preset-search input::placeholder { color:#a69caf; }
+.preset-caption { font-size:9px; line-height:1.6; margin:6px 1px 9px; color:#a69caf; }
+.preset-block { margin:0 0 6px; border:1px solid #ffffff14; border-radius:11px; background:#ffffff04; }
+.preset-row-head { display:flex; align-items:center; gap:7px; padding:4px 7px 4px 9px; min-height:45px; cursor:pointer; list-style:none; }
+.preset-row-head::-webkit-details-marker { display:none; }
+.preset-row-dot { width:4px; height:19px; border-radius:3px; background:#b2a2c8a6; flex-shrink:0; }
+.preset-row-copy { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.preset-row-copy strong { font-size:11px; font-weight:500; line-height:1.5; color:#ded8e7; overflow-wrap:anywhere; }
+.preset-row-copy small { color:#9b92a9; font-size:8px; line-height:1.4; }
+.preset-block.is-off .preset-row-dot { background:#a19aaa35; }
+.preset-block.is-off .preset-row-copy strong { color:#b0a8bc; }
+.preset-switch { display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0; width:38px; height:36px; cursor:pointer; }
+.preset-switch input { position:absolute; width:100%; height:100%; opacity:0; margin:0; cursor:pointer; z-index:1; }
+.preset-switch-track { position:relative; width:28px; height:16px; border-radius:12px; background:#88818f4a; border:1px solid #ffffff12; }
+.preset-switch-track::after { content:''; position:absolute; width:12px; height:12px; border-radius:50%; background:#d3cbdc; top:1px; left:1px; transition:transform .12s; }
+.preset-switch input:checked + .preset-switch-track { background:#a492bd9c; }
+.preset-switch input:checked + .preset-switch-track::after { transform:translateX(12px); }
+.preset-switch input:focus-visible + .preset-switch-track { outline:2px solid #d0c2e2; outline-offset:3px; }
+.preset-switch input:disabled + .preset-switch-track { opacity:.4; }
+.preset-block-body { padding:0 10px 9px; border-top:1px solid #ffffff0a; }
+.preset-field-line { display:grid; grid-template-columns:minmax(0,1fr) 67px; gap:7px; }
+.preset-manager .profile-label { font-size:9px; gap:4px; margin:8px 0; }
+.preset-input-frame { display:block; height:32px; width:100%; overflow:hidden; }
+.preset-input-frame.multiline { height:180px; }
+.preset-manager .preset-input-frame > :is(input,textarea) { display:block; width:123.076923%; max-width:none; height:39px; min-height:0; margin:0; padding:7px 9px; font-size:16px; line-height:23px; transform:scale(.8125); transform-origin:top left; border-radius:10px; }
+.preset-manager .preset-input-frame > textarea { height:221px; resize:none; }
+.preset-manager .preset-select { box-sizing:border-box; width:100%; min-height:32px; padding:5px 6px; margin:0; border:1px solid #ffffff18; border-radius:9px; background:#36343e; color:#d8d0e2; font:inherit; font-size:11px; }
+.preset-actions { display:flex; gap:6px; margin:7px 0 0; }
+.preset-actions .preset-button { flex:1; min-height:30px; font-size:10px; }
+.preset-manager .profile-trace { padding:8px 9px; margin-top:7px; font-size:10px; }
+.preset-manager .profile-help, .preset-manager .profile-material { font-size:10px; line-height:1.7; margin:7px 0; }
 .preset-import:empty { display:none; }
-.preset-import { max-height:280px; overflow:auto; border:1px solid var(--line, #ffffff20); border-radius:16px; padding:10px; }
-.preset-preview .profile-material { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
-.preset-block textarea { min-height:120px; }
-
-.preset-select { display:block; width:100%; min-height:42px; margin:8px 0; padding:8px 10px; background:#303038; color:#ece9f0; border:1px solid #ffffff20; border-radius:12px; font-family:inherit; font-size:16px; }
-.preset-block .profile-check input { accent-color:#b5a8c4; }
+.preset-import { max-height:280px; overflow:auto; border:1px solid #c9b4e133; border-radius:12px; padding:10px; margin-bottom:10px; background:#ffffff05; }
+.preset-import .section-label { font-size:11px; margin:3px 0 6px; }
+.preset-import .profile-material, .preset-preview .profile-material { white-space:pre-wrap; overflow-wrap:anywhere; max-height:260px; overflow:auto; }
+.preset-manager [hidden] { display:none!important; }
+@media (prefers-reduced-motion:reduce) { .preset-switch-track::after { transition:none; } }
