@@ -12,11 +12,11 @@ export const entryEnd=id=>`<!-- /yui-message:${id} -->`;
 export const plain=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/[\\`*_{}\[\]()#!~|]/g,'\\$&');
 export const unplain=value=>value.replace(/\\([\\`*_{}\[\]()#!~|])/g,'$1').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
 export async function digest(win,text){const bytes=await win.crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');}
-export const sourceValue=m=>JSON.stringify([m.messageId,messagePersonId(m),m.sender.kind,kindOf(m),summary(m),m.replyTo||'',m.storyTime?.text||'']);
+export const sourceValue=m=>JSON.stringify([m.messageId,messagePersonId(m),m.sender.kind,kindOf(m),summary(m),m.replyTo||'',m.storyTime?.text||'',...(m.narration?[m.narration.persistent]:[])]);
 export function messageRow(book,history,m) {
   const person=book.people.find(p=>p.id===messagePersonId(m));if(!person)throw Error('补记所属人物不存在，请先核对');
   const original=m.replyTo&&quotedMessage(history,m),originalName=original&&(original.sender.kind==='self'?book.self.name:person.name);
-  return {id:m.messageId,personId:person.id,person:person.name,sender:m.sender.kind==='self'?book.self.name:person.name,sequence:m.sequence,type:kindOf(m),text:summary(m),time:m.storyTime?.text||'剧情时间未记录',quote:m.replyTo?(original?`${originalName}：${summary(original)}`:'原消息已删除'):null,source:sourceValue(m)};
+  return {id:m.messageId,personId:person.id,person:person.name,sender:kindOf(m)==='narration'?(m.narration.persistent?'旁白（持续场景，以后续持续场景为准）':'旁白（临时情境）'):m.sender.kind==='self'?book.self.name:person.name,sequence:m.sequence,type:kindOf(m),text:summary(m),time:m.storyTime?.text||'剧情时间未记录',quote:m.replyTo?(original?`${originalName}：${summary(original)}`:'原消息已删除'):null,source:sourceValue(m)};
 }
 export function supplementBlocks(message,{allowMissing=false}={}) {
   const saved=message?.extra?.[SUPPLEMENT_KEY];if(!saved)return [];

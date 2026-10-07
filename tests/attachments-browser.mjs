@@ -30,10 +30,10 @@ try{
   await add(p,'好友甲');await add(p,'好友乙');await chat(p);
   await b(p,'添加附件').click();
   assert.equal(await b(p,'添加附件').getAttribute('aria-expanded'),'true');
-  const grid=p.locator('.attachment-panel[data-view="home"]');assert.equal(await grid.locator('.attachment-tool').count(),2);
+  const grid=p.locator('.attachment-panel[data-view="home"]');assert.equal(await grid.locator('.attachment-tool').count(),3);
   const panelBounds=await grid.boundingBox(),aBounds=await b(p,'表情包').boundingBox(),bBounds=await b(p,'转账').boundingBox(),composerBounds=await p.locator('.text-composer').boundingBox();
   assert(Math.abs(aBounds.y-bBounds.y)<2);assert(aBounds.width<90);assert(panelBounds.height<135);assert(panelBounds.y+panelBounds.height<=composerBounds.y+1);
-  assert.equal(await grid.locator('svg').count(),2);assert.equal(await grid.locator('.profile-action').count(),0);
+  assert.equal(await grid.locator('svg').count(),3);assert.equal(await grid.locator('.profile-action').count(),0);
   await p.screenshot({path:path.join(root,`test-results/attachments-tools-${tt?'tt':'st'}.png`)});
   await b(p,'添加附件').click();assert(await grid.isHidden());await b(p,'添加附件').click();await p.locator('.real-messages').click({position:{x:20,y:30}});assert(await grid.isHidden());
   await b(p,'添加附件').click();await p.keyboard.press('Escape');assert(await grid.isHidden());

@@ -65,9 +65,10 @@ export function appendMessage(history, message, expectedRevision) {
 export const forPerson = (history, id) => history.messages.filter(m => m.conversationId === conversationId(id));
 export const latestMessage = (history, id) => forPerson(history, id).at(-1);
 export const quotedMessage = (history, message) => history.messages.find(m => m.messageId === message.replyTo && m.conversationId === message.conversationId);
-export function createChange(history, personId, kind, ids, text) {
+export function createChange(history, personId, kind, ids, text, persistent) {
   const change = { id: crypto.randomUUID(), archiveId: history.archiveId, personId, expectedRevision: history.revision, kind, ids: [...new Set(ids)], createdAt: new Date().toISOString() };
   if (kind === 'edit') { validateText(text); change.text = text; }
+  if(persistent!==undefined)change.persistent=persistent;
   return change;
 }
 export async function changeFingerprint(change) {
@@ -84,8 +85,9 @@ export function applyChange(history, change, fingerprint) {
   if (selected.some(m => !m)) throw Error('找不到所选消息或消息不属于此会话');
   const next = clone(history);
   if (change.kind === 'edit') {
-    if (selected.length !== 1 || kindOf(selected[0]) !== 'text') throw Error('只能编辑文字消息；表情包和转账可删除'); validateText(change.text);
+    if (selected.length !== 1 || !['text','narration'].includes(kindOf(selected[0]))) throw Error('只能编辑文字和旁白；表情包和转账可删除'); validateText(change.text);
     const target = next.messages.find(m => m.messageId === change.ids[0]); target.text = change.text; target.editedAt = change.createdAt;
+    if(change.persistent!==undefined){if(kindOf(target)!=='narration'||typeof change.persistent!=='boolean')throw Error('当前场景设置无效');target.narration.persistent=change.persistent;}
   } else {
     next.messages = next.messages.filter(m => !change.ids.includes(m.messageId));
     // IDs only prevent uncertain old sends from resurrecting deleted text. No body backup.
@@ -97,7 +99,7 @@ export function applyChange(history, change, fingerprint) {
 
 export function createRichMessage(archiveId, personId, payload, sequence, incoming = false) {
   const factory = incoming ? createReply : createMessage;
-  const message = { ...factory(archiveId, personId, payload.kind === 'text' ? payload.text : '特殊消息', sequence), ...clone(payload) };
+  const message = { ...factory(archiveId, personId, ['text','narration'].includes(payload.kind) ? payload.text : '特殊消息', sequence), ...clone(payload) };
   message.text = summary(message); validatePayload(message); return message;
 }
 

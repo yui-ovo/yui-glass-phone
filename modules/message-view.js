@@ -3,7 +3,7 @@ import {phoneSyncStatus} from './sync-events.js';
 import { forPerson, MAX_TEXT, quotedMessage, conversationId } from './messages.js';
 import { createMessageActions } from './message-actions.js';
 import { createAttachments } from './attachment-view.js';
-import { kindOf, summary, money, transferState } from './rich-messages.js';
+import { kindOf, summary, money, transferState, currentScene } from './rich-messages.js';
 
 // Gray glass cv2 markup comes from the user's original regex/chat skin.
 // Every name and message is a text node, never executable regex output/HTML.
@@ -58,6 +58,12 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
   composer.append(extra, input, send); wrap.append(quoteDraft, count, feedback, composer);
   const observer = new ResizeObserver(resizeInput); observer.observe(wrap);
   function bubble(message, pending) {
+    if(kindOf(message)==='narration'){
+      const row=el('div','phone-narration'+(pending?' pending-message':''));row.dataset.messageId=message.messageId;row.setAttribute('aria-label','旁白');
+      const content=el('div','sp-message-bubble-cv2 narration-text',message.text);content.tabIndex=0;content.title='长按或右键编辑旁白';row.append(content);
+      if(message.narration.persistent)row.append(el('span','narration-tag',pending?'保存后设为当前场景':currentScene(messenger.history(),person.id)?.messageId===message.messageId?'当前场景':'此前场景'));
+      if(!pending)actions.decorate(row,message);return row;
+    }
     const outgoing = message.sender.kind === 'self', suffix = outgoing ? ' self' : '';
     const row = el('div', 'sp-message-cv2' + suffix), main = el('div', 'sp-message-main-cv2' + suffix);
     row.dataset.messageId = message.messageId; if (pending) row.classList.add('pending-message');
@@ -97,6 +103,7 @@ export function mountConversation({ wrap, scroll, person, self, messenger, el, b
       const range=historyRange(wrap.ownerDocument.defaultView,history,person),sync=phoneSyncStatus(wrap.ownerDocument.defaultView),info=el('details','chat-history-info');
       info.append(el('summary','',sync.error?'补记同步待核对':range.nearCapacity?'聊天记录接近容量上限':range.long?'长聊提示 · 查看回复范围':`回复参考 · 最近 ${range.shown} 条`));
       info.append(el('p','',`本次手机回复带最近 ${range.shown} 条原始对话，较早 ${range.omitted} 条不作为原始聊天发送。显示条数与发送条数分开。`));
+      const scene=currentScene(history,person.id);if(scene)info.append(el('p','current-scene-reference','当前场景（独立参考）：'+scene.text));
       info.append(el('p','',range.sharing?`尚未补进正文：${range.pending} 条；已同步记录不会重复追加。`:'此人物未开启正文分享。'));
       info.append(el('p','','千千结总结状态未确认。长聊后可回正文推进剧情；较早内容能否被记住取决于记忆配置与摘要结果。'));
       if(sync.error){info.append(el('p','',sync.error),button('核对补记修改',()=>void messenger.syncStory(),'history-more'));}

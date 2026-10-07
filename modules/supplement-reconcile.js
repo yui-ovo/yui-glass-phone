@@ -10,7 +10,7 @@ export function applyReconciliation(history,{expectedRevision,changes=[],synced=
     if(ids.has(change.id))throw Error('同一条消息有多处修改，请先核对');ids.add(change.id);
     const m=next.messages.find(m=>m.messageId===change.id);if(!m||messagePersonId(m)!==change.personId)throw Error('补记与手机消息对应关系变化');
     if(change.text===null){next.messages=next.messages.filter(m=>m.messageId!==change.id);next.deletedMessageIds=[...new Set([...(next.deletedMessageIds||[]),change.id])];}
-    else {if(kindOf(m)!=='text')throw Error('表情包和转账只能删除，请在手机内操作转账状态');validateText(change.text);m.text=change.text;m.editedAt=new Date().toISOString();}
+    else {if(!['text','narration'].includes(kindOf(m)))throw Error('表情包和转账只能删除，请在手机内操作转账状态');validateText(change.text);m.text=change.text;m.editedAt=new Date().toISOString();}
   }
   next.storySyncedIds=[...new Set([...(next.storySyncedIds||[]),...synced])];
   if(sameJson(history,next))return history;
@@ -38,7 +38,7 @@ export async function planFloor(win,book,history,message){
     }
     const parsed=parseEntries(block),headers=new Map();
     for(const e of r.entries){
-      if(!r.sourceIds.includes(e.id)||seen.has(e.id)||!['text','sticker','transfer'].includes(e.type)||![e.sourceHash,e.textHash,e.headerHash].every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/.test(h)))throw Error('消息对应关系重复或损坏');seen.add(e.id);
+      if(!r.sourceIds.includes(e.id)||seen.has(e.id)||!['text','sticker','transfer','narration'].includes(e.type)||![e.sourceHash,e.textHash,e.headerHash].every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/.test(h)))throw Error('消息对应关系重复或损坏');seen.add(e.id);
       const m=history.messages.find(m=>m.messageId===e.id);if(m&&(messagePersonId(m)!==e.personId||kindOf(m)!==e.type))throw Error('消息身份或类型不符');
       if(!m&&!history.deletedMessageIds?.includes(e.id))throw Error('关联手机消息缺失，未自动删除正文');
       let text=null;
@@ -51,7 +51,7 @@ export async function planFloor(win,book,history,message){
       const bodyChanged=text===null||await digest(win,text)!==e.textHash;
       const phoneChanged=!m||await digest(win,sourceValue(m))!==e.sourceHash;
       if(bodyChanged){
-        if(phoneChanged){if((!m&&text===null)||(m&&kindOf(m)==='text'&&text===m.text))continue;throw Error('手机和正文同时修改了同一条消息，请将两边内容改成一致后重试');}
+        if(phoneChanged){if((!m&&text===null)||(m&&['text','narration'].includes(kindOf(m))&&text===m.text))continue;throw Error('手机和正文同时修改了同一条消息，请将两边内容改成一致后重试');}
         if(m)changes.push({id:e.id,personId:e.personId,text});
       }
     }
@@ -59,7 +59,7 @@ export async function planFloor(win,book,history,message){
   }
   const nextHistory=applyReconciliation(history,{expectedRevision:history.revision,changes,synced});
   const next=clone(message);let body=message.mes;
-  for(const {block,ids,headers} of models){const rows=ids.map(id=>nextHistory.messages.find(m=>m.messageId===id)).filter(Boolean).map(m=>{const row=messageRow(book,nextHistory,m),old=headers?.get(m.messageId);if(old){const end=old.lastIndexOf('\n内容：\n'),prefix=old.slice(0,end),quoteAt=prefix.indexOf('\n引用：');row.header=(quoteAt<0?prefix:prefix.slice(0,quoteAt))+(row.quote?'\n引用：'+plain(row.quote):'')+old.slice(end);}return row;});
+  for(const {block,ids,headers} of models){const rows=ids.map(id=>nextHistory.messages.find(m=>m.messageId===id)).filter(Boolean).map(m=>{const row=messageRow(book,nextHistory,m),old=headers?.get(m.messageId);if(old&&row.type!=='narration'){const end=old.lastIndexOf('\n内容：\n'),prefix=old.slice(0,end),quoteAt=prefix.indexOf('\n引用：');row.header=(quoteAt<0?prefix:prefix.slice(0,quoteAt))+(row.quote?'\n引用：'+plain(row.quote):'')+old.slice(end);}return row;});
     const replacement=formatSupplement(block.receipt.batchId,rows);body=body.replace(block.text,()=>replacement);
     const index=next.extra[SUPPLEMENT_KEY].batches.findIndex(r=>r.batchId===block.receipt.batchId);
     next.extra[SUPPLEMENT_KEY].batches[index]=await makeReceipt(win,book.id,block.receipt.batchId,rows,ids);

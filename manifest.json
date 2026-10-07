@@ -6,7 +6,7 @@
   "js": "index.js",
   "generate_interceptor": "yuiPhoneSupplementInterceptorV1",
   "author": "yui-ovo",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "homePage": "https://github.com/yui-ovo/yui-glass-phone",
   "auto_update": false,
   "hooks": {

@@ -67,7 +67,8 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
     action('引用', () => attempt(() => { closeMenu(); messenger.quote(person.id, id); wrap.querySelector('.text-composer textarea')?.focus(); }, status)),
     action('删除', () => confirmDelete([id])),
     action('多选', () => { closeMenu(); suppressUntil = 0; selecting = true; selected = new Set([id]); repaint(); }), status);
-    if (kindOf(currentMessage(id)) !== 'text') [...box.querySelectorAll('button')].find(b => b.textContent === '编辑')?.remove();
+    if (!['text','narration'].includes(kindOf(currentMessage(id)))) [...box.querySelectorAll('button')].find(b => b.textContent === '编辑')?.remove();
+    if(kindOf(currentMessage(id))==='narration')[...box.querySelectorAll('button')].find(b=>b.textContent==='引用')?.remove();
     placeMenu();
   }
   function decorate(row, message) {
@@ -96,6 +97,7 @@ export function createMessageActions({ wrap, scroll, person, messenger, el, butt
       const box = panel('编辑消息', 'edit'), input = el('textarea', 'message-edit-input'), status = el('p', 'profile-status'); input.setAttribute('aria-label', '编辑消息内容'); input.value = editing.text; input.dataset.messageId = editing.messageId; input.rows = 6;
       input.oninput = () => { messenger.editInput(person.id, input.value); status.textContent = ''; };
       box.append(input, status, button('保存消息修改', () => attempt(() => messenger.saveEdit(person.id), status), 'profile-action primary'), button('取消编辑', () => { panelKind = ''; layer.hidden = true; layer.replaceChildren(); messenger.cancelEdit(person.id); }));
+      if(typeof editing.persistent==='boolean'){const row=el('label','narration-scene-toggle'),check=el('input');check.type='checkbox';check.checked=editing.persistent;check.setAttribute('aria-label','持续作为当前场景');check.onchange=()=>messenger.editScene(person.id,check.checked);row.append(check,el('span','','持续作为当前场景'));box.insertBefore(row,status);box.insertBefore(el('p','narration-help','取消持续或删除当前场景后，会恢复上一条仍保留的持续场景。'),status);}
     } else if (panelKind === 'edit' || panelKind === 'saving') { panelKind = ''; layer.hidden = true; layer.replaceChildren(); }
   }
   scroll.addEventListener('pointerdown', event => {

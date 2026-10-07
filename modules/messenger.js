@@ -3,7 +3,7 @@ import { PRESETS_KEY, readPresets, selectedPreset } from './presets.js';
 import { assemblePhonePrompt } from './reply-prompt.js';
 import { createMessageStore } from './message-host.js';
 import { createMessage, createReply, createChange, conversationId, createDelivery, applyDelivery, changeFingerprint } from './messages.js';
-import { kindOf, parseReply, stickerPayload, transferPayload } from './rich-messages.js';
+import { kindOf, parseReply, stickerPayload, transferPayload, narrationPayload } from './rich-messages.js';
 import { createStickerLibrary } from './stickers.js';
 import { sameJson } from './contacts.js';
 import { readConfig, replyContext, apiRequest } from './ai.js';
@@ -44,6 +44,7 @@ export function createMessenger(win, profiles) {
       if (!op.delivery && op.message.source === 'phone-manual' && state.edit === op.edit) { state.text = ''; state.quoteId = undefined; state.edit++; }
       if (op.delivery ? !op.delivery.incoming : op.message.source === 'phone-manual') state.replyAfter = Date.now() + 800;
       if (op.clearAttachment && state.attachment && state.attachment.edit === op.clearAttachment.edit) { state.attachment.amount = ''; state.attachment.note = ''; state.attachment.edit++; }
+      if(op.clearNarration && state.attachment?.narrationEdit===op.clearNarration.edit){state.attachment.narrationText='';state.attachment.narrationPersistent=false;state.attachment.narrationEdit++;}
       state.operation = null;
       await syncPhoneChanges(win);
     } catch (e) { if (ticket === epoch) op.error = `${e.message || '保存未确认'}。可核对并重试，消息可能已写入。`; }
@@ -63,9 +64,9 @@ export function createMessenger(win, profiles) {
     } catch (e) { if (ticket === epoch && change === op) op.error = `${e.message || '保存未确认'}。修改可能已写入，可核对并重试。`; }
     finally { if (ticket === epoch) { op.busy = false; emit(); } }
   }
-  function mutate(id, kind, ids, text, expectedRevision) {
+  function mutate(id, kind, ids, text, expectedRevision, persistent) {
     ensureMutable(); cancelReply();
-    const value = createChange(history, id, kind, ids, text); if (expectedRevision !== undefined) value.expectedRevision = expectedRevision;
+    const value = createChange(history, id, kind, ids, text, persistent); if (expectedRevision !== undefined) value.expectedRevision = expectedRevision;
     change = { value, busy: false, error: '' }; void executeChange();
   }
   async function requestReply(id) {
@@ -123,7 +124,7 @@ export function createMessenger(win, profiles) {
     const state = draft(id); if (state.editing) throw Error('请先处理文字编辑');
     const delivery = createDelivery(history, id, payloads, settlements);
     delivery.messages.forEach(m=>stampStoryTime(win,session.book,m));
-    state.operation = { delivery, message: delivery.messages[0], clearAttachment, busy: false, error: '' }; void execute(id);
+    state.operation = { delivery, message: delivery.messages[0], clearAttachment, busy: false, error: '' }; void execute(id);return state.operation;
   }
   return {
     async bind(value, signal) {
@@ -138,11 +139,13 @@ export function createMessenger(win, profiles) {
       try { const ticket = epoch, captured = library; const asset = await captured.get(assetId); if (ticket !== epoch || signal?.aborted) return; if (!asset || asset.hidden) throw Error('找不到可用的表情包'); deliver(id, [stickerPayload(asset)]); }
       finally { state.sendingSticker = false; } },
     sendTransfer(id, amount, note) { const state = draft(id); deliver(id, [transferPayload(amount, note)], [], {edit: state.attachment?.edit}); },
+    addNarration(id,text,persistent){const state=draft(id),op=deliver(id,[narrationPayload(text,persistent)]);op.clearNarration={edit:state.attachment?.narrationEdit};},
     settleTransfer(id, messageId, action) { deliver(id, [], [{messageId, action}]); },
-    beginEdit(id, messageId) { ensureMutable(); const m = history.messages.find(m => m.messageId === messageId && m.conversationId === conversationId(id)); if (!m) throw Error('找不到原消息'); if (kindOf(m) !== 'text') throw Error('只能编辑文字消息'); cancelReply(); draft(id).editing = { messageId, text: m.text, revision: history.revision }; emit(); },
+    beginEdit(id, messageId) { ensureMutable(); const m = history.messages.find(m => m.messageId === messageId && m.conversationId === conversationId(id)); if (!m) throw Error('找不到原消息'); if (!['text','narration'].includes(kindOf(m))) throw Error('只能编辑文字和旁白'); cancelReply(); draft(id).editing = { messageId, text: m.text, revision: history.revision,...(m.narration?{persistent:m.narration.persistent}:{}) }; emit(); },
+    editScene(id,persistent){const state=draft(id);if(state.editing&&typeof state.editing.persistent==='boolean'&&!change)state.editing.persistent=persistent;},
     editInput(id, text) { const state = draft(id); if (state.editing && !change) state.editing.text = text; },
     cancelEdit(id) { if (change) return; draft(id).editing = undefined; emit(); },
-    saveEdit(id) { const value = draft(id).editing; if (value) mutate(id, 'edit', [value.messageId], value.text, value.revision); },
+    saveEdit(id) { const value = draft(id).editing; if (value) mutate(id, 'edit', [value.messageId], value.text, value.revision,value.persistent); },
     deleteMessages: (id, ids) => mutate(id, 'delete', ids),
     quote(id, messageId) { const state = draft(id); if (messageId && !history?.messages.some(m => m.messageId === messageId && m.conversationId === conversationId(id))) throw Error('找不到引用消息'); state.quoteId = messageId; state.edit++; emit(); },
     retryChange: executeChange,
@@ -158,7 +161,7 @@ export function createMessenger(win, profiles) {
     retry: id => execute(id), refresh: () => refresh(true),
     async endSend(id) { const state = draft(id), op = state.operation, ticket = epoch; if (!op || op.busy) return; await refresh(); if (ticket === epoch && state.operation === op && history) { state.operation = null; emit(); } },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    dirty: () => !!job || !!change || [...drafts.values()].some(d => d.text.length || d.operation || d.editing || d.quoteId || d.sendingSticker || d.attachment && (d.attachment.busy || d.attachment.amount || d.attachment.note || d.attachment.urls || d.attachment.description || d.attachment.files?.length || Object.keys(d.attachment.assetEdits || {}).length || Object.keys(d.attachment.groupDrafts || {}).length || d.attachment.fileDescriptions?.length || d.attachment.newCategory)),
+    dirty: () => !!job || !!change || [...drafts.values()].some(d => d.text.length || d.operation || d.editing || d.quoteId || d.sendingSticker || d.attachment && (d.attachment.busy || d.attachment.narrationText || d.attachment.amount || d.attachment.note || d.attachment.urls || d.attachment.description || d.attachment.files?.length || Object.keys(d.attachment.assetEdits || {}).length || Object.keys(d.attachment.groupDrafts || {}).length || d.attachment.fileDescriptions?.length || d.attachment.newCategory)),
     reset() { cancelReply(); epoch++; drafts.clear(); change = undefined; store = undefined; history = undefined; reading = false; error = ''; listeners.clear(); },
   };
 }

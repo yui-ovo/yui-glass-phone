@@ -30,8 +30,8 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
   function home() {
     view='home'; const {body}=frame('聊天工具');
     body.classList.add('attachment-tools');
-    const paths = { sticker:'M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4h-2 M13 21v-4a4 4 0 0 1 4-4h4 M8 9h.01 M15 9h.01 M8 13c1 1.5 2.5 2 4 1.5', transfer:'M5 8h14m-4-4 4 4-4 4 M19 16H5m4-4-4 4 4 4' };
-    for(const [label,glyph,run] of [['表情包','sticker',()=>void stickers()],['转账','transfer',transfer]]) {
+    const paths = { narration:'M4 5h16M4 10h16M4 15h10M4 20h7', sticker:'M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4h-2 M13 21v-4a4 4 0 0 1 4-4h4 M8 9h.01 M15 9h.01 M8 13c1 1.5 2.5 2 4 1.5', transfer:'M5 8h14m-4-4 4 4-4 4 M19 16H5m4-4-4 4 4 4' };
+    for(const [label,glyph,run] of [['表情包','sticker',()=>void stickers()],['转账','transfer',transfer],['旁白','narration',narration]]) {
       const item=button('',run,'attachment-tool');item.setAttribute('aria-label',label);
       const tile=el('span','attachment-tool-icon'), svg=wrap.ownerDocument.createElementNS('http://www.w3.org/2000/svg','svg'), path=wrap.ownerDocument.createElementNS('http://www.w3.org/2000/svg','path');
       svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');path.setAttribute('d',paths[glyph]);svg.append(path);tile.append(svg);
@@ -50,6 +50,15 @@ export function createAttachments({ wrap, person, messenger, el, button }) {
     body.append(el('p','transfer-local-hint','虚构转账 · 不涉及真实支付'));
     const actions=el('div','attachment-dialog-actions');body.append(actions);
     actions.append(button('取消转账',()=>{form.amount='';form.note='';form.edit++;close();}),button('发送转账',()=>{try{messenger.sendTransfer(person.id,form.amount,form.note);close();}catch(e){status.textContent=e.message;}},'profile-action primary'));
+  }
+  function narration(){
+    view='narration';const {body,status}=frame('旁白');
+    const field=el('textarea','narration-input');field.setAttribute('aria-label','旁白内容');field.rows=4;field.maxLength=10000;field.placeholder='例如：此时双方正在打王者，接下来是游戏内私聊。';field.value=form.narrationText||'';
+    const changed=()=>{form.narrationEdit=(form.narrationEdit||0)+1;};field.oninput=()=>{form.narrationText=field.value;changed();};
+    const row=el('label','narration-scene-toggle'),check=el('input');check.type='checkbox';check.checked=!!form.narrationPersistent;check.setAttribute('aria-label','持续作为当前场景');check.onchange=()=>{form.narrationPersistent=check.checked;changed();};row.append(check,el('span','','持续作为当前场景'));
+    body.append(field,row,el('p','narration-help','仅影响这位好友。持续场景会保留到下一条持续场景；添加后仍需点飞机请求回复。'));
+    compactField(field);
+    const actions=el('div','attachment-dialog-actions');actions.append(button('取消',()=>{form.narrationText='';form.narrationPersistent=false;changed();close();}),button('添加旁白',()=>{try{messenger.addNarration(person.id,field.value,check.checked);close();}catch(e){status.textContent=e.message;}},'profile-action primary'));body.append(actions);
   }
   function inspectTransfer(messageId) {
     const message=messenger.history()?.messages.find(m=>m.messageId===messageId&&m.conversationId===conversationId(person.id)); if(!message?.transfer)return;

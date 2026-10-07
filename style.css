@@ -1318,3 +1318,17 @@ h1, h2, p { margin: 0; }
 .chat-history-info summary{cursor:pointer;color:#b7b3bf}
 .chat-history-info p{margin:6px 0;overflow-wrap:anywhere}
 .history-more{align-self:center;padding:6px 10px;font-size:11px;color:#beb9ca;background:#ffffff05;border:1px solid #ffffff16;border-radius:8px;margin:4px 0 12px;cursor:pointer}
+
+/* Narration belongs to the scene, outside the speech bubbles. */
+.phone-narration { position:relative; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:4px; margin:14px 12px; text-align:center; }
+.phone-narration .narration-text { background:none; border:0; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; border-radius:4px; padding:4px 8px; max-width:100%; color:#aaa7b2; font-size:11px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+.phone-narration .narration-text::before,.phone-narration .narration-text::after { display:none; }
+.narration-tag { font-size:9px; color:#888590; }
+.phone-narration.message-selected { background:#aaa1bc18; border-radius:8px; }
+.phone-narration .message-selector { position:absolute; left:0; top:4px; }
+.narration-input { box-sizing:border-box; width:100%; padding:9px; color:#dedbe5; background:#ffffff06; border:1px solid #ffffff18; border-radius:10px; font-family:inherit; }
+.attachment-panel .sticker-input-frame > .narration-input { white-space:pre-wrap; overflow-wrap:anywhere; }
+.narration-scene-toggle { display:flex; align-items:center; gap:7px; margin:10px 0; color:#c6c1d0; font-size:11px; }
+.narration-scene-toggle input { width:15px; height:15px; margin:0; accent-color:#aaa0bc; }
+.narration-help { color:#9995a2; font-size:10px; line-height:1.65; margin:8px 0; }
+.attachment-panel[data-view="narration"] .attachment-dialog-actions { margin-top:12px; }
