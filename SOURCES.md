@@ -1,3 +1,11 @@
+## 0.17.0 · 好友联动
+
+2026-10-09 核对官方 [ST st-context](https://github.com/SillyTavern/SillyTavern/blob/release/public/scripts/st-context.js)、[ST script](https://github.com/SillyTavern/SillyTavern/blob/release/public/script.js)、[TT st-context](https://github.com/Darkatse/TauriTavern/blob/main/src/scripts/st-context.js) 和 [TT script](https://github.com/Darkatse/TauriTavern/blob/main/src/script.js)。两者均导出 setExtensionPrompt(key,value,position,depth,scan,role,filter)；本功能使用 IN_CHAT=1、depth=0、scan=false、SYSTEM=0，并在正常生成前设置、结束/停止/切档时清理。
+
+好友事件协议、确认页面和关系状态由本项目编写，不复制第三方手机源码。关系仅在用户确认后写入已有独立通讯录；正文只读，不注册千千结写入接口。
+
+---
+
 ## 0.15.0 · 补记修改依据
 
 - 沿用 0.14.0 核实的 ST/TT 保存与历史接口。对照 ST public/script.js 的 MESSAGE_UPDATED 时序：事件发生在编辑器最终 saveChatConditional 之前，故先显式保存并读回确认，再修改手机记录。

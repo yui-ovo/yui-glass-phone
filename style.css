@@ -1332,3 +1332,18 @@ h1, h2, p { margin: 0; }
 .narration-scene-toggle input { width:15px; height:15px; margin:0; accent-color:#aaa0bc; }
 .narration-help { color:#9995a2; font-size:10px; line-height:1.65; margin:8px 0; }
 .attachment-panel[data-view="narration"] .attachment-dialog-actions { margin-top:12px; }
+
+/* Compact friendship workflow within the phone. */
+.friend-entry { width:100%; padding:9px 12px; margin:0 0 10px; text-align:left; font-size:12px; background:#ffffff06; border:1px solid #ffffff12; border-radius:10px; color:#d3cdda; }
+.friend-page { font-size:12px; }
+.friend-help,.friend-warning { font-size:11px; line-height:1.65; color:#aaa4b3; white-space:pre-wrap; overflow-wrap:anywhere; }
+.friend-warning { color:#d6a8a8; }
+.friend-search { display:flex; align-items:center; gap:7px; margin:10px 0; }
+.friend-search input,.friend-card textarea { box-sizing:border-box; width:100%; min-width:0; padding:8px; border:1px solid #ffffff1a; border-radius:9px; background:#ffffff07; color:#e4dfe9; font-family:inherit; line-height:1.4; font-size:16px; }
+.friend-search button { flex-shrink:0; }
+.friend-card { padding:11px; border:1px solid #ffffff12; border-radius:12px; background:#ffffff04; margin:8px 0; }
+.friend-card strong { font-size:12px; font-weight:500; }
+.friend-card p { font-size:11px; line-height:1.65; margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.friend-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+.friend-evidence { color:#a8a2b2; font-size:10px; margin:8px 0; }
+.friend-evidence p { max-height:140px; overflow:auto; }

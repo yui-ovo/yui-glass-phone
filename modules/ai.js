@@ -92,8 +92,8 @@ export function replyContext(win, book, person) {
     for (const key of ['name', 'description', 'personality', 'scenario', 'mes_example']) card[key] = typeof data[key] === 'string' ? data[key] : '';
   }
   const materials = person.roleplayMaterials || []; validateMaterials(materials);
-  return { character: { name: person.name, onlinePersona: person.description, card }, user: persona,
-    phoneSelf: { name: book.self.name }, storyTime:storyTime(win,book), story: readStoryContext(win, person), memory: readMemoryReference(win, person), worldbook: materials.filter(item => !(person.aiExcludedMaterials || []).includes(materialKey(item))).map(({world,uid,title,content})=>({world,uid,title,content})) };
+  return { character: { name: person.name, account:person.account, onlinePersona: person.description, card }, user: persona,
+    phoneSelf: { name: book.self.name, account:book.self.account }, storyTime:storyTime(win,book), story: readStoryContext(win, person), memory: readMemoryReference(win, person), worldbook: materials.filter(item => !(person.aiExcludedMaterials || []).includes(materialKey(item))).map(({world,uid,title,content})=>({world,uid,title,content})) };
 }
 export function buildPrompt(context, history, personId, historyCount, prompt = DEFAULT_PROMPT, frontPrompt = '', preset) {
   const data = JSON.stringify(context);

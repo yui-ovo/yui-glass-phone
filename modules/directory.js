@@ -1,5 +1,7 @@
 import { presetSettings } from './preset-editor.js';
-import { clone, displayName, newPerson, sameJson } from './contacts.js';
+import { clone, displayName, newPerson, newAccount, sameJson } from './contacts.js';
+import { createFriendBridge } from './friend-bridge.js';
+import { friendPage } from './friend-view.js';
 import { readAvatar, loadAvatarUrl } from './avatar.js';
 import { createProfileHost } from './host.js';
 import { createMessenger } from './messenger.js';
@@ -17,6 +19,7 @@ import { clockDisplay } from './phone-clock.js';
 export function createDirectory({ window: win, document: doc, navigate, icon, notify, onReplyState }) {
   const host = createProfileHost(win);
   const messenger = createMessenger(win, host);
+  const friendBridge=createFriendBridge(win,host,notify);
   const storyBridge = createStoryBridge(win, host, notify, () => {if(session){messenger.cancelReply();return messenger.refresh();}});
   let clearMessageView;
   let session, selected, route = 'home', loadError = '', loading = false, dead = false;
@@ -97,7 +100,8 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const persona = field('线上人设（如有）', draft.description, 'description', 1000, true);
       persona.placeholder = '可填写作者设定的线上聊天习惯、语气、表情使用方式等';
     }
-    scroll.append(el('p', 'profile-meta', `虚构账号：${draft.account}`));
+    const accountField=field('微信号（剧情）',draft.account,'account',40);accountField.placeholder='留空时自动生成';accountField.autocomplete='off';accountField.spellcheck=false;
+    scroll.append(el('p','profile-help','3–40 位字母、数字、下划线或短横线；保存在当前存档。待办好友申请须先处理，才能改号。'));
     if (!self) {
       scroll.append(el('p', 'profile-meta', `来源：${draft.source.name || '手动创建'}`));
       const trace = el('details', 'profile-trace'); trace.append(el('summary', '', '身份与来源'), el('p', 'profile-meta', `人物 ID：${draft.id}\n来源类型：${draft.source.kind}\n来源角色文件：${draft.source.avatarFile || '无'}`)); scroll.append(trace);
@@ -109,6 +113,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       const setRelation = () => { const friend = preset.value === 'friend', isKnown = preset.value !== 'stranger'; draft.relation = { friend, known: isKnown, accountKnown: friend || (isKnown && known.checked) }; knownLabel.hidden = preset.value !== 'known'; status.textContent = '资料已修改，尚未保存'; };
       knownLabel.hidden = preset.value !== 'known'; preset.onchange = setRelation; known.onchange = setRelation;
       scroll.append(el('p', 'profile-help', '登记人物后，只有“已是好友”的人会出现在联系人中。'));
+      const linkLabel=el('label','profile-check','剧情加好友联动'),link=el('input');link.type='checkbox';link.checked=!!draft.friendLinkEnabled;link.setAttribute('aria-label','剧情加好友联动');link.onchange=()=>{draft.friendLinkEnabled=link.checked;status.textContent='资料已修改，尚未保存';};linkLabel.prepend(link);scroll.append(linkLabel,el('p','profile-help','开启后向正文提供此人物的账号、关系和待办申请。剧情事件到“联系人 → 新的朋友”确认，不会遇到关键词就自动加好友。'));
     }
     scroll.append(personaPreview(win, el));
     const materials = !self ? materialEditor({ win, scroll, draft, el, button, current, status }) : undefined;
@@ -147,6 +152,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       if (busy || saving || !current()) return;
       if (materials?.busy()) { status.textContent = '请等待世界书资料读取完成'; return; }
       const book = clone(captured.book), value = clone(draft); value.name = value.name.trim();
+      value.account=value.account.trim()||newAccount();if(!self&&value.relation.friend)delete value.friendRequest;
       if (!self) {
         value.remark = value.remark.trim(); value.description = value.description.trim();
         const index = book.people.findIndex(p => p.id === value.id);
@@ -155,7 +161,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       }
       else book.self = value;
       saving = true; status.textContent = '正在保存…'; const controls = [...scroll.querySelectorAll('input, textarea, select, button'), save, cancel]; const disabledBefore = controls.map(n=>n.disabled); controls.forEach(n => n.disabled = true);
-      try { await host.save(captured, book, signal); storyBridge.invalidate(); if (current()) { Object.assign(draft, value); persisted = true; baseline = clone(draft); baselineUrl = url.value; selected = self ? selected : value.id; status.textContent = '已保存到当前存档'; } }
+      try { await host.save(captured, book, signal); storyBridge.invalidate();friendBridge.clear(); if (current()) { Object.assign(draft, value);accountField.value=value.account; persisted = true; baseline = clone(draft); baselineUrl = url.value; selected = self ? selected : value.id; status.textContent = '已保存到当前存档'; } }
       catch (error) { if (current()) status.textContent = `${error.message || '保存失败'}；草稿仍在此页`; }
       finally { if (current()) { saving = false; controls.forEach((n,i) => n.disabled = disabledBefore[i]); } }
     }, 'profile-action primary');
@@ -225,6 +231,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
       if (loadError) scroll.append(button('重新读取', () => { loadError = ''; void load(); navigate(route, false, true); }));
       else void load(); return wrap;
     }
+    if(target==='friends'){const view=friendPage({win,host,session,signal:controller.signal,base,el,button,go,onSaved:()=>{friendBridge.clear();messenger.cancelReply();}});editor=view.editor;return view.wrap;}
     if (target === 'details') return editorPage();
     if (target === 'clock-settings' || target === 'supplement-settings') {const view=storySettings({win,host,session,signal:controller.signal,base,el,button,bridge:storyBridge,kind:target==='clock-settings'?'clock':'supplement'});editor=view.editor;return view.wrap;}
     if (target === 'contact-card') return contactCard();
@@ -299,6 +306,7 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     const { wrap, scroll } = base(title, manage ? 'contacts' : 'home', actions);
     if (actions) wrap.addEventListener('pointerdown', event => { const more = actions.querySelector('details'); if (!more.contains(event.target)) more.open = false; });
     search(scroll);
+    if(!manage)scroll.append(button('新的朋友',()=>go('friends'),'friend-entry'));
     const list = session.book.people.filter(p => !p.deletedAt && (manage || p.relation.friend));
     if (target === 'messages') {
       const history = messenger.history();
@@ -317,10 +325,10 @@ export function createDirectory({ window: win, document: doc, navigate, icon, no
     navigate(route, false, true);
     notify(hadDraft ? '聊天已切换，未保存修改已取消' : '已切换到当前存档');
   });
-  return { render, setRoute(target){route=target;}, clock(){if(!session&&!loading&&!loadError)void load();return session?clockDisplay(win,session.book):{time:'--:--',date:loadError?'剧情时间暂不可读取':'正在读取剧情时间',note:loadError||''};}, handles: target => ['clock-settings','supplement-settings','preset-settings', 'ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
+  return { render, setRoute(target){route=target;}, clock(){if(!session&&!loading&&!loadError)void load();return session?clockDisplay(win,session.book):{time:'--:--',date:loadError?'剧情时间暂不可读取':'正在读取剧情时间',note:loadError||''};}, handles: target => ['friends','clock-settings','supplement-settings','preset-settings', 'ai-settings', 'messages', 'contacts', 'moments', 'me', 'people', 'add', 'new-card', 'new-card-extra', 'new-manual', 'chat', 'contact-card', 'deleted-people', 'delete-person', 'restore-person', 'details', 'self'].includes(target),
     suspend() { messenger.cancelReply(); editor?.suspend?.(); },
     dirty: () => !!editor?.dirty() || messenger.dirty(),
     leave(force = false) { if (!force && editor?.saving()) { notify('正在保存，请稍候'); return false; } if (!force && editor?.dirty() && !win.confirm('资料尚未保存，放弃修改并离开？')) return false; clearEditor(); clearMessageView?.(); clearMessageView = undefined; return true; },
-    dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); storyBridge.dispose(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },
+    dispose() { dead = true; generation++; clearEditor(); clearMessageView?.(); storyBridge.dispose(); friendBridge.dispose(); messenger.reset(); controller.abort(); unsubscribe(); host.dispose(); },
   };
 }
